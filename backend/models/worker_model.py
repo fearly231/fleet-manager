@@ -1,55 +1,50 @@
-import uuid
+from sqlalchemy import String, Integer
+from sqlalchemy.orm import Mapped, mapped_column
 
-# --- SQLAlchemy (Modele Bazy Danych) ---
-from sqlalchemy import String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from pydantic import BaseModel, ConfigDict, Field, EmailStr
 
-# --- Pydantic (Schematy / Walidacja API) ---
-from pydantic import BaseModel, ConfigDict, Field
+from database.database import Base
 
 
-# 1. Deklaratywna baza dla SQLAlchemy
-class Base(DeclarativeBase):
-    pass
-
-
-# Database model (SQLAlchemy)
 class Worker(Base):
+    ''' Class representing the Worker table in the database '''
     __tablename__ = "worker"
 
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(255), index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
 
-
-# ==========================================
-# 2. Schematy API (Pydantic)
-# ==========================================
+#API schemas (Pydantic)
 
 class WorkerBase(BaseModel):
-    name: str = Field(max_length=255)
+    ''' Class with common fields for Worker, used as a base for other schemas '''
+    name: str = Field(max_length=100)
+    email: EmailStr = Field(max_length=120)
 
 
-# Properties to receive via API on creation
 class WorkerCreate(WorkerBase):
+    ''' 
+    Class with all fields required for creation, 
+    it inherits from base with name and email,
+    id is generated in the database
+      '''
     pass
 
 
-# Properties to receive via API on update, all are optional
 class WorkerUpdate(BaseModel):
-    # W czystym Pydanticu, aby pole było opcjonalne (w przeciwieństwie do wymaganego w Base),
-    # zazwyczaj nadpisujemy je z type hintem `str | None` i domyślną wartością `None`.
-    name: str | None = Field(default=None, max_length=255)
+    ''' Class with all fields optional for update operations '''
+    name: str | None = Field(default=None, max_length=100)
+    email: EmailStr | None = Field(default=None, max_length=120)
 
 
-# Properties to return via API, id is always required
 class WorkerPublic(WorkerBase):
-    id: uuid.UUID
-
-    # Kluczowe ustawienie w Pydantic V2: pozwala schematowi "zrozumieć" 
-    # obiekt ORM z SQLAlchemy (zastępuje dawne `orm_mode = True`)
+    ''' Class with properties to return, includes id from database '''
+    id: int
+    #Translate db object to JSON using attribute names
     model_config = ConfigDict(from_attributes=True)
 
 
 class WorkersPublic(BaseModel):
+    ''' Class for returning a list of workers with a count '''
     data: list[WorkerPublic]
     count: int
