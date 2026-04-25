@@ -192,3 +192,7 @@ cython_debug/
 .terraform/
 *.tfstate
 *.tfstate.backup
+
+#lib api
+!frontend/src/lib/
+!frontend/src/lib/**/*
