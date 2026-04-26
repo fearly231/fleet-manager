@@ -2,15 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { makeApi } from "@/lib/api/make";
-import { vehicleApi } from "@/lib/api/vehicle";
-import { workerApi } from "@/lib/api/worker";
+import { vehmodelApi } from "@/lib/api/vehmodel";
+import { EntityType } from "@/types";
+import { INITIAL_STATES } from "@/lib/forms";
 
 import AddModal from "./modals/AddModal";
 import DataTable from "./DataTable";
 import DeleteModal from "./modals/DeleteModal";
 import EditModal from "./modals/EditModal";
-// Entities from DB
-type EntityType = "Makes" | "Vehicles" | "Workers" | "Reservations" | "Actions" | "Models" | "Versions";
 
 export default function Dashboard() {
     const [activeTab, setActiveTab] = useState<EntityType>("Makes");
@@ -36,6 +35,9 @@ export default function Dashboard() {
                 case "Makes":
                     result = await makeApi.getAll();
                     break;
+                case "Models":
+                    result = await vehmodelApi.getAll();
+                    break;
                 default:
                     result = { message: `Data for ${entity} not implemented yet.` };
             }
@@ -56,6 +58,9 @@ export default function Dashboard() {
                 case "Makes":
                     result = await makeApi.update(id, updatedData);
                     break;
+                case "Models":
+                    result = await vehmodelApi.update(id, updatedData);
+                    break;
                 default:
                     alert(`Updating ${entity} is not implemented yet.`);
                     return;
@@ -69,16 +74,40 @@ export default function Dashboard() {
         }
     }
 
+    const addData = async (entity: EntityType, newData: any) => {
+        try {
+            switch (entity) {
+                case "Makes":
+                    await makeApi.create(newData);
+                    break;
+                 case "Models":
+                     await vehmodelApi.create(newData);
+                     break;
+                default:
+                    alert(`Adding ${entity} is not implemented yet.`);
+                    return;
+            }
+            setIsAddModalOpen(false);
+            loadData(activeTab);
+            
+        } catch (err: any) {
+            alert(`Error adding item: ${err.message}`);
+        }
+    };
+
 
     const confirmDelete = async () => {
         if (!itemToDelete) return;
 
         setIsDeleting(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+            // await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
             switch (activeTab) {
                 case "Makes":
                     await makeApi.delete(itemToDelete.id);
+                    break;
+                case "Models":
+                    await vehmodelApi.delete(itemToDelete.id);
                     break;
                 default:
                     alert(`Deleting ${activeTab} is not implemented yet.`);
@@ -103,7 +132,7 @@ export default function Dashboard() {
         loadData(activeTab);
     }, [activeTab]);
 
-    const tabs: EntityType[] = ["Makes", "Vehicles", "Workers", "Reservations", "Actions", "Models", "Versions"];
+    const tabs: EntityType[] = ["Makes", "Vehicles", "Workers", "Reservations", "Actions", "Models"];
 
     const handleEditClick = (item: any) => {
         setItemToEdit(item);
@@ -118,14 +147,16 @@ export default function Dashboard() {
     };
 
     const handleAddNewClick = () => {
-        if (activeTab === "Makes") {
-            setIsAddModalOpen(true);
-        } else {
-            alert(`Adding new ${activeTab.slice(0, -1)} is not implemented yet.`);
+
+        switch (activeTab) {
+            case "Makes":
+            case "Models":
+                setIsAddModalOpen(true);
+                break;
+            default:
+                alert(`Adding new ${activeTab.slice(0, -1)} is not implemented yet.`);
         }
     };
-
-
 
 
     return (
@@ -149,7 +180,7 @@ export default function Dashboard() {
             </div>
 
             {/* Showing Results */}
-            <div className="bg-gray-300 p-6 rounded-lg shadow-md border border-gray-200 min-h-[300px]">
+            <div className="bg-gray-300 p-6 rounded-lg shadow-md border border-gray-200 min-h-75">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xl font-semibold text-gray-800">
                         Viewing: <span className="text-blue-600">{activeTab}</span>
@@ -194,10 +225,9 @@ export default function Dashboard() {
             <AddModal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
-                entityType={activeTab === "Makes" ? activeTab : "Makes"}
-                onSuccess={() => {
-                    loadData(activeTab);
-                }}
+                entityType={activeTab}
+                onSuccess={(newData) => addData(activeTab, newData)}
+                initialState={INITIAL_STATES[activeTab]}
             />
             <DeleteModal
                 isOpen={isDeleteModalOpen}

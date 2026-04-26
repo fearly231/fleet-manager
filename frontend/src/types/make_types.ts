@@ -1,20 +1,23 @@
-export interface Make {
-  id: number;
+export interface MakeBase {
   name: string;
 }
 
-export interface MakePublic {
+export interface MakePublic extends MakeBase {
   id: number;
-  name: string;
 }
+
+export interface MakeCreate extends MakeBase {
+  
+}
+
+// changes all from MakeBase to be optional
+export type MakeUpdate = Partial<MakeBase>
 
 export interface MakesPublic {
-  items: Make[];
+  items: MakePublic[];
   total: number;
   skip: number;
   limit: number;
 }
 
-export interface MakeCreate {
-  name: string;
-}
+

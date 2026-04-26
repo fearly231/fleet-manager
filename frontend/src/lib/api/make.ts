@@ -1,5 +1,5 @@
 import { API_URL } from "./config";
-import { MakesPublic } from "@/types/make_types";
+import { MakesPublic, MakeCreate, MakePublic, MakeUpdate } from "@/types/make_types";
 
 export const makeApi = {
   getAll: async (skip = 0, limit = 100): Promise<MakesPublic> => {
@@ -9,7 +9,7 @@ export const makeApi = {
   },
 
     
-  create: async (data: { name: string }) => {
+  create: async (data: MakeCreate): Promise<MakePublic> => {
     const response = await fetch(`${API_URL}/make/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -27,7 +27,7 @@ export const makeApi = {
   },
 
 
-  update: async (id: number, data: any) => {
+  update: async (id: number, data: MakeUpdate): Promise<MakePublic> => {
     const response = await fetch(`${API_URL}/make/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -49,7 +49,14 @@ export const makeApi = {
     const response = await fetch(`${API_URL}/make/${id}`, {
       method: "DELETE",
     });
-    if (!response.ok) throw new Error(`Make DELETE Error: ${response.status}`);
+    if (!response.ok) {
+      const errorData = await response.json();
+      if(response.status === 409) {
+        const conflictMessage = errorData.detail || "Database integration error";
+        throw new Error(`${conflictMessage}`);
+      }
+      throw new Error(`Make DELETE Error: ${response.status}`);
+    }
     return response.json();
   }
 };
