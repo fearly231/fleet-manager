@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from database.database import Base
 
 
-#  from models.vehicle_model import Vehicle
+from models.vehicle_model import Vehicle
 from models.worker_model import Worker
 
 
@@ -48,12 +48,12 @@ class Reservation(Base):
     state_start: Mapped[Optional[str]] = mapped_column(String(350), nullable=True)
     state_end: Mapped[Optional[str]] = mapped_column(String(350), nullable=True)
 
-    # vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicle.id", ondelete="RESTRICT"), nullable=False)
+    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicle.id", ondelete="RESTRICT"), nullable=False)
     worker_id: Mapped[int] = mapped_column(
         ForeignKey("worker.id", ondelete="RESTRICT"), nullable=False
     )
 
-    # vehicle: Mapped["Vehicle"] = relationship(back_populates="reservations")
+    vehicle: Mapped["Vehicle"] = relationship(back_populates="reservations")
     worker: Mapped["Worker"] = relationship(back_populates="reservations")
 
 
@@ -64,7 +64,7 @@ class ReservationBase(BaseModel):
     date_end_planned: datetime
     price: float
     purpose: Purpose_enum
-    # vehicle_id: int
+    vehicle_id: int
     worker_id: int
 
 

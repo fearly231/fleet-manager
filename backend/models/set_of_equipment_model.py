@@ -20,8 +20,8 @@ class SetOfEquipment(Base):
     Attributes:
         id (Mapped[int]): The primary key of the set of equipment record.
         name (Mapped[str]): The name of the set of equipment (max 100 characters).
-        version_id (Mapped[Optional[int]]): The foreign key linking to the version table.
-        version (Mapped[Optional["Version"]]): The relationship object pointing to the
+        version_id (Mapped[int]): The foreign key linking to the version table.
+        version (Mapped["Version"]): The relationship object pointing to the
             specific version this set belongs to.
     """
 
@@ -34,10 +34,10 @@ class SetOfEquipment(Base):
         secondary=equipment_set_association, back_populates="sets"
     )
 
-    version_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("version.id"), nullable=False
+    version_id: Mapped[int] = mapped_column(
+        ForeignKey("version.id", ondelete="RESTRICT"), nullable=False
     )
-    version: Mapped[Optional["Version"]] = relationship(back_populates="sets")
+    version: Mapped["Version"] = relationship(back_populates="sets")
 
 
 class SetOfEquipmentBase(BaseModel):
@@ -51,7 +51,7 @@ class SetOfEquipmentBase(BaseModel):
     """
 
     name: str = Field(max_length=100)
-    version_id: Optional[int] = None
+    version_id: int
 
 
 class SetOfEquipmentCreate(SetOfEquipmentBase):

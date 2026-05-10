@@ -9,6 +9,7 @@ from models.version_model import Version
 
 if TYPE_CHECKING:
     from models.caretaker_model import Caretaker
+    from models.reservation_model import Reservation
 
 
 class Vehicle(Base):
@@ -22,14 +23,15 @@ class Vehicle(Base):
         ForeignKey("vehmodel.id", ondelete="RESTRICT"), nullable=False
     )
     version_id: Mapped[int] = mapped_column(
-        ForeignKey("version.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("version.id", ondelete="RESTRICT"), nullable=False, unique=True
     )
 
     description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     veh_model: Mapped["VehModel"] = relationship(back_populates="vehicles")
-    version: Mapped["Version"] = relationship(back_populates="vehicles")
+    version: Mapped["Version"] = relationship(back_populates="vehicle")
     caretakers: Mapped["Caretaker"] = relationship(back_populates="vehicle")
+    reservations: Mapped[list["Reservation"]] = relationship(back_populates="vehicle")
 
 
 class VehicleBase(BaseModel):
