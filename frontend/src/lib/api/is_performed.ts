@@ -15,8 +15,7 @@ export const isPerformedApi = {
 			`${API_URL}/is-performed/?skip=${skip}&limit=${limit}`,
 		);
 		if (!response.ok) throw new Error(`IsPerformed GET Error: ${response.status}`);
-		const result = await response.json();
-		// Map backend response (data, count) to frontend format (items, total)
+		const result: { data: IsPerformedPublic[]; count: number } = await response.json();
 		return {
 			items: result.data,
 			total: result.count,
