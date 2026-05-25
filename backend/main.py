@@ -17,4 +17,4 @@ app.add_middleware(CORSMiddleware,
     allow_methods=["*"],  # Allows all HTTP methods
     allow_headers=["*"],  # Allows all headers (e.g., Content-Type)
 )
-app.include_router(api_router)
+app.include_router(api_router, prefix="/api/v1")

@@ -11,7 +11,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
     "fastapi[standard]>=0.136.0" \
     "pydantic[email]>=2.13.3" \
     "sqlalchemy>=2.0.49" \
-    "sqlalchemy-orm>=1.2.10"
+    "sqlalchemy-orm>=1.2.10" \
+    "python-jose[cryptography]>=3.3.0" \
+    "passlib[bcrypt]>=1.7.4" \
+    "python-multipart>=0.0.9"
 
 COPY . .
 

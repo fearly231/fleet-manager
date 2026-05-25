@@ -31,18 +31,37 @@ export default function EditModal({
 	const fields = Object.keys(initialData).filter((key) => key !== "id"); // Exclude ID from editable fields
 	const optionalFieldsForEntity = OPTIONAL_FIELDS[entityType as EntityType] || new Set();
 
-	const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		setFormData({
-			...formData,
-			[e.target.name]: e.target.value,
-		});
-	};
+        const getInputType = (field: string) => {
+                if (field.includes("date")) return "datetime-local";
+                if (field === "price" || field.endsWith("_id") || field === "distance") return "number";
+                return "text";
+        };
 
-	const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		onSuccess(formData);
-	};
+        const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+                setFormData({
+                        ...formData,
+                        [e.target.name]: e.target.value,
+                });
+        };
 
+        const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+                e.preventDefault();
+                const normalizedData = Object.fromEntries(
+                        Object.entries(formData).map(([key, value]) => {
+                                if ((key.endsWith("_id") || key === "price" || key === "distance") && value !== "" && value !== null) {
+                                        return [key, Number(value)];
+                                }
+                                if (key.includes("date") && value) {
+                                        // Simple check if it's already an ISO string or a datetime-local format
+                                        if (typeof value === "string" && !value.endsWith("Z")) {
+                                            return [key, new Date(value).toISOString()];
+                                        }
+                                }
+                                return [key, value === "" ? null : value];
+                        }),
+                );
+                onSuccess(normalizedData);
+		};
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
 			<div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
@@ -86,9 +105,10 @@ export default function EditModal({
 								</label>
 								<input
 									id={field}
-									type="text"
+									type={getInputType(field)}
+                                                                                step={field === "price" || field === "distance" ? "0.01" : undefined}
 									name={field}
-									value={formData[field] || ""}
+									value={ field.includes("date") && formData[field] ? new Date(formData[field]).toISOString().slice(0, 16) : formData[field] || "" }
 									onChange={handleChange}
 									className="w-full border border-gray-300 rounded-lg px-4 py-2 outline-none transition-all focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
 									required={!isOptional}
