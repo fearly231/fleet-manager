@@ -9,356 +9,354 @@ import { workerApi } from "@/lib/api/worker";
 import { setofequipmentApi } from "@/lib/api/set_of_equipment";
 import { vehmodelApi } from "@/lib/api/vehmodel";
 import { versionApi } from "@/lib/api/version";
-import { reservationApi } from '@/lib/api/reservation';
+import { reservationApi } from "@/lib/api/reservation";
 import { INITIAL_STATES } from "@/lib/forms";
 import type { EntityType } from "@/types";
+import { useToast } from "@/components/ui/Toast";
 import DataTable from "./DataTable";
 import AddModal from "./modals/AddModal";
 import DeleteModal from "./modals/DeleteModal";
 import EditModal from "./modals/EditModal";
 
+type EntityTab = {
+  key: EntityType;
+  label: string;
+  count?: number;
+};
+
+const ENTITY_TABS: EntityTab[] = [
+  { key: "Makes", label: "Marki" },
+  { key: "Vehicles", label: "Pojazdy" },
+  { key: "Workers", label: "Pracownicy" },
+  { key: "Reservations", label: "Rezerwacje" },
+  { key: "Models", label: "Modele" },
+  { key: "Actions", label: "Akcje" },
+  { key: "Equipments", label: "Wyposażenie" },
+  { key: "SetOfEquipments", label: "Zestawy" },
+  { key: "Versions", label: "Wersje" },
+];
+
+function extractItems(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === "object" && "items" in data) return (data as Record<string, unknown>).items as unknown[];
+  if (data && typeof data === "object" && "data" in data) return (data as Record<string, unknown>).data as unknown[];
+  return [];
+}
+
 export default function Dashboard() {
-    const [activeTab, setActiveTab] = useState<EntityType>("Makes");
-    const [data, setData] = useState<any>(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [itemToDelete, setItemToDelete] = useState<any>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [itemToEdit, setItemToEdit] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<EntityType>("Makes");
+  const [data, setData] = useState<unknown>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ id: number; name?: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState<unknown>(null);
+  const { toast } = useToast();
 
-    // Loading data depending on the active tab
-    const loadData = async (entity: EntityType) => {
-        setLoading(true);
-        setError(null);
-        setData(null);
+  const loadData = async (entity: EntityType) => {
+    setLoading(true);
+    setError(null);
+    setData(null);
 
-        try {
-            let result: any;
-            switch (entity) {
-                case "Makes":
-                    result = await makeApi.getAll();
-                    break;
-                case "Vehicles":
-                    result = await vehicleApi.getAll();
-                    break;
-                case "Workers":
-                    result = await workerApi.getAll();
-                    break;
-                case "Models":
-                    result = await vehmodelApi.getAll();
-                    break;
-                case "Actions":
-                    result = await actionApi.getAll();
-                    break;
-                case "Equipments":
-                    result = await equipmentApi.getAll();
-                    break;
-                case "SetOfEquipments":
-                    result = await setofequipmentApi.getAll();
-                    break;
-                case "Versions":
-                    result = await versionApi.getAll();
-                    break;
-                case "Reservations":
-                    result = await reservationApi.getAll();
-                    break;
-                
-                default:
-                    result = { message: `Data for ${entity} not implemented yet.` };
-            }
-            setData(result);
-        } catch (err: any) {
-            setError(err.message || "Failed to fetch data.");
-        } finally {
-            setLoading(false);
-        }
-    };
+    try {
+      let result: unknown;
+      switch (entity) {
+        case "Makes": result = await makeApi.getAll(); break;
+        case "Vehicles": result = await vehicleApi.getAll(); break;
+        case "Workers": result = await workerApi.getAll(); break;
+        case "Models": result = await vehmodelApi.getAll(); break;
+        case "Actions": result = await actionApi.getAll(); break;
+        case "Equipments": result = await equipmentApi.getAll(); break;
+        case "SetOfEquipments": result = await setofequipmentApi.getAll(); break;
+        case "Versions": result = await versionApi.getAll(); break;
+        case "Reservations": result = await reservationApi.getAll(); break;
+        default: result = { message: `Dane dla ${entity} nie są jeszcze dostępne.` };
+      }
+      setData(result);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Nie udało się pobrać danych.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const updateData = async (
-        entity: EntityType,
-        id: number,
-        updatedData: any,
-    ) => {
-        setLoading(true);
-        setError(null);
-        try {
-            let result: any;
-            switch (entity) {
-                case "Makes":
-                    result = await makeApi.update(id, updatedData);
-                    break;
-                case "Vehicles":
-                    result = await vehicleApi.update(id, updatedData);
-                    break;
-                case "Workers":
-                    result = await workerApi.update(id, updatedData);
-                    break;
-                case "Models":
-                    result = await vehmodelApi.update(id, updatedData);
-                    break;
-                case "Actions":
-                    result = await actionApi.update(id, updatedData);
-                    break;
-                case "Equipments":
-                    result = await equipmentApi.update(id, updatedData);
-                    break;
-                case "SetOfEquipments":
-                    result = await setofequipmentApi.update(id, updatedData);
-                    break;
-                case "Versions":
-                    result = await versionApi.update(id, updatedData);
-                    break;
-                case "Reservations":
-                    result = await reservationApi.update(id, updatedData);
-                    break;
-                default:
-                    alert(`Updating ${entity} is not implemented yet.`);
-                    return;
-            }
-            setIsEditModalOpen(false);
-            setItemToEdit(null);
-            loadData(activeTab);
-        } catch (err: any) {
-            alert(`Error updating item: ${err.message}`);
-        }
-    };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updateData = async (entity: EntityType, id: number, updatedData: any) => {
+    setLoading(true);
+    setError(null);
+    try {
+      switch (entity) {
+        case "Makes": await makeApi.update(id, updatedData); break;
+        case "Vehicles": await vehicleApi.update(id, updatedData); break;
+        case "Workers": await workerApi.update(id, updatedData); break;
+        case "Models": await vehmodelApi.update(id, updatedData); break;
+        case "Actions": await actionApi.update(id, updatedData); break;
+        case "Equipments": await equipmentApi.update(id, updatedData); break;
+        case "SetOfEquipments": await setofequipmentApi.update(id, updatedData); break;
+        case "Versions": await versionApi.update(id, updatedData); break;
+        case "Reservations": await reservationApi.update(id, updatedData); break;
+        default: return;
+      }
+      setIsEditModalOpen(false);
+      setItemToEdit(null);
+      toast("success", "Element został zaktualizowany.");
+      loadData(activeTab);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Błąd aktualizacji.";
+      toast("error", msg);
+    }
+  };
 
-    const addData = async (entity: EntityType, newData: any) => {
-        try {
-            switch (entity) {
-                case "Makes":
-                    await makeApi.create(newData);
-                    break;
-                case "Vehicles":
-                    await vehicleApi.create(newData);
-                    break;
-                case "Workers":
-                    await workerApi.create(newData);
-                    break;
-                case "Models":
-                    await vehmodelApi.create(newData);
-                    break;
-                case "Actions":
-                    await actionApi.create(newData);
-                    break;
-                case "Equipments":
-                    await equipmentApi.create(newData);
-                    break;
-                case "SetOfEquipments":
-                    await setofequipmentApi.create(newData);
-                    break;
-                case "Versions":
-                    await versionApi.create(newData);
-                    break;
-                case "Reservations":
-                    await reservationApi.create(newData);
-                    break;
-                default:
-                    alert(`Adding ${entity} is not implemented yet.`);
-                    return;
-            }
-            setIsAddModalOpen(false);
-            loadData(activeTab);
-        } catch (err: any) {
-            alert(`Error adding item: ${err.message}`);
-        }
-    };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const addData = async (entity: EntityType, newData: any) => {
+    try {
+      switch (entity) {
+        case "Makes": await makeApi.create(newData); break;
+        case "Vehicles": await vehicleApi.create(newData); break;
+        case "Workers": await workerApi.create(newData); break;
+        case "Models": await vehmodelApi.create(newData); break;
+        case "Actions": await actionApi.create(newData); break;
+        case "Equipments": await equipmentApi.create(newData); break;
+        case "SetOfEquipments": await setofequipmentApi.create(newData); break;
+        case "Versions": await versionApi.create(newData); break;
+        case "Reservations": await reservationApi.create(newData); break;
+        default: return;
+      }
+      setIsAddModalOpen(false);
+      toast("success", "Nowy element został dodany.");
+      loadData(activeTab);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Błąd dodawania.";
+      toast("error", msg);
+    }
+  };
 
-    const confirmDelete = async () => {
-        if (!itemToDelete) return;
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
+    try {
+      switch (activeTab) {
+        case "Makes": await makeApi.delete(itemToDelete.id); break;
+        case "Vehicles": await vehicleApi.delete(itemToDelete.id); break;
+        case "Workers": await workerApi.delete(itemToDelete.id); break;
+        case "Models": await vehmodelApi.delete(itemToDelete.id); break;
+        case "Actions": await actionApi.delete(itemToDelete.id); break;
+        case "Equipments": await equipmentApi.delete(itemToDelete.id); break;
+        case "SetOfEquipments": await setofequipmentApi.delete(itemToDelete.id); break;
+        case "Versions": await versionApi.delete(itemToDelete.id); break;
+        case "Reservations": await reservationApi.delete(itemToDelete.id); break;
+        default: return;
+      }
+      setIsDeleteModalOpen(false);
+      setItemToDelete(null);
+      toast("success", "Element został usunięty.");
+      loadData(activeTab);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Błąd usuwania.";
+      toast("error", msg);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
-        setIsDeleting(true);
-        try {
-            await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate API delay
-            switch (activeTab) {
-                case "Makes":
-                    await makeApi.delete(itemToDelete.id);
-                    break;
-                case "Vehicles":
-                    await vehicleApi.delete(itemToDelete.id);
-                    break;
-                case "Workers":
-                    await workerApi.delete(itemToDelete.id);
-                    break;
-                case "Models":
-                    await vehmodelApi.delete(itemToDelete.id);
-                    break;
-                case "Actions":
-                    await actionApi.delete(itemToDelete.id);
-                    break;
-                case "Equipments":
-                    await equipmentApi.delete(itemToDelete.id);
-                    break;
-                case "SetOfEquipments":
-                    await setofequipmentApi.delete(itemToDelete.id);
-                    break;
-                case "Versions":
-                    await versionApi.delete(itemToDelete.id);
-                    break;
-                case "Reservations":
-                    await reservationApi.delete(itemToDelete.id);
-                    break;
-                default:
-                    alert(`Deleting ${activeTab} is not implemented yet.`);
-                    setIsDeleting(false);
-                    setIsDeleteModalOpen(false);
-                    return;
-            }
+  useEffect(() => {
+    loadData(activeTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
-            setIsDeleteModalOpen(false);
-            setItemToDelete(null);
-            loadData(activeTab);
-        } catch (err: any) {
-            alert(`Error deleting item: ${err.message}`);
-        } finally {
-            setIsDeleting(false);
-        }
-    };
+  const handleEditClick = (item: unknown) => {
+    setItemToEdit(item);
+    setIsEditModalOpen(true);
+  };
 
-    // changing active tab
-    useEffect(() => {
-        loadData(activeTab);
-    }, [activeTab]);
+  const handleDeleteClick = (id: number) => {
+    const items = extractItems(data);
+    const item = items.find((i: unknown) => (i as Record<string, unknown>).id === id) as Record<string, unknown> | undefined;
+    setItemToDelete({ id, name: item?.name as string | undefined });
+    setIsDeleteModalOpen(true);
+  };
 
-    const tabs: EntityType[] = [
-        "Makes",
-        "Vehicles",
-        "Workers",
-        "Reservations",
-        "Actions",
-        "Models",
-        "Equipments",
-        "SetOfEquipments",
-        "Versions",
-    ];
+  const handleAddNewClick = () => {
+    if (INITIAL_STATES[activeTab]) {
+      setIsAddModalOpen(true);
+      return;
+    }
+    toast("error", `Dodawanie ${activeTab} nie jest jeszcze dostępne.`);
+  };
 
-    const handleEditClick = (item: any) => {
-        setItemToEdit(item);
-        setIsEditModalOpen(true);
-    };
+  const items = extractItems(data);
 
-    const handleDeleteClick = (id: number) => {
-        const items = Array.isArray(data) ? data : data?.items || data?.data || [];
-        const item = items.find((i: any) => i.id === id);
-        setItemToDelete(item);
-        setIsDeleteModalOpen(true);
-    };
-
-    const handleAddNewClick = () => {
-        const addableTabs: EntityType[] = [
-            "Makes",
-            "Vehicles",
-            "Workers",
-            "Models",
-            "Actions",
-            "Equipments",
-            "SetOfEquipments",
-            "Versions",
-            "Reservations",
-        ];
-
-        if (addableTabs.includes(activeTab)) {
-            setIsAddModalOpen(true);
-            return;
-        }
-
-        alert(`Adding new ${activeTab.slice(0, -1)} is not implemented yet.`);
-    };
-
-    return (
-        <div className="max-w-5xl">
-            <h2 className="text-3xl font-bold mb-6">Fleet Data Manager</h2>
-
-            {/* Tab Navigation */}
-            <div className="flex flex-wrap gap-2 mb-8 border-b border-gray-200 pb-4">
-                {tabs.map((tab) => (
-                    <button
-                        type="button"
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`px-6 py-2 rounded-t-lg font-semibold transition-colors ${activeTab === tab
-                                ? "bg-blue-600 text-white border-b-4 border-blue-800"
-                                : "bg-gray-200 text-gray-600 hover:bg-gray-300"
-                            }`}
-                    >
-                        {tab}
-                    </button>
-                ))}
-            </div>
-
-            {/* Showing Results */}
-            <div className="bg-gray-300 p-6 rounded-lg shadow-md border border-gray-200 min-h-75">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-semibold text-gray-800">
-                        Viewing: <span className="text-blue-600">{activeTab}</span>
-                    </h3>
-
-                    <button
-                        type="button"
-                        onClick={handleAddNewClick}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium"
-                    >
-                        + Add New {activeTab.slice(0, -1)}
-                    </button>
-                </div>
-
-                {loading && (
-                    <div className="flex items-center gap-2 text-blue-500">
-                        <div className="w-5 h-5 border-t-2 border-b-2 border-blue-500 rounded-full animate-spin"></div>
-                        Loading data...
-                    </div>
-                )}
-
-                {error && (
-                    <div className="p-4 bg-red-50 text-red-600 rounded border border-red-200">
-                        <strong>Error:</strong> {error}
-                    </div>
-                )}
-
-                {!loading && !error && data && (
-                    <div className="space-y-4">
-                        {/* Showing results */}
-                       
-                        <DataTable
-                            items={Array.isArray(data) ? data : data.items || data.data || []}
-                            onEdit={handleEditClick}
-                            onDelete={handleDeleteClick}
-                        ></DataTable>
-                    </div>
-                )}
-            </div>
-            <AddModal
-                isOpen={isAddModalOpen}
-                onClose={() => setIsAddModalOpen(false)}
-                entityType={activeTab}
-                onSuccess={(newData) => addData(activeTab, newData)}
-                initialState={INITIAL_STATES[activeTab]}
-            />
-            <DeleteModal
-                isOpen={isDeleteModalOpen}
-                onClose={() => {
-                    setIsDeleteModalOpen(false);
-                    setItemToDelete(null);
-                }}
-                onConfirm={confirmDelete}
-                itemName={itemToDelete?.name}
-                isDeleting={isDeleting}
-            />
-            <EditModal
-                isOpen={isEditModalOpen}
-                onClose={() => {
-                    setIsEditModalOpen(false);
-                    setItemToEdit(null);
-                }}
-                onSuccess={(updatedData) => {
-                    updateData(activeTab, itemToEdit.id, updatedData);
-                }}
-                entityType={activeTab}
-                initialData={itemToEdit}
-            />
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
+        <div>
+          <h2
+            className="text-2xl sm:text-3xl font-bold tracking-tight"
+            style={{
+              background: "linear-gradient(135deg, var(--color-text-primary) 0%, var(--color-accent-soft) 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            Fleet Data Manager
+          </h2>
+          <p className="text-sm mt-1" style={{ color: "var(--color-text-secondary)" }}>
+            Zarządzaj wszystkimi encjami systemu
+          </p>
         </div>
-    );
+
+        <button type="button" onClick={handleAddNewClick} className="btn-primary">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Dodaj {ENTITY_TABS.find((t) => t.key === activeTab)?.label?.replace(/i$/, "ę") || activeTab}
+        </button>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex overflow-x-auto gap-1 mb-6 pb-px scrollbar-thin" role="tablist">
+        {ENTITY_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`relative shrink-0 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              activeTab === tab.key
+                ? "tab-active text-white"
+                : "hover:text-white"
+            }`}
+            style={{
+              color: activeTab === tab.key ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+              background: activeTab === tab.key ? "var(--color-overlay)" : "transparent",
+            }}
+          >
+            {tab.label}
+            {activeTab === tab.key && (
+              <span
+                className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-5 rounded-full"
+                style={{ background: "var(--color-accent)" }}
+              />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Content Area */}
+      <div className="glass-surface rounded-2xl p-4 sm:p-6 min-h-[24rem]">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold flex items-center gap-2" style={{ color: "var(--color-text-primary)" }}>
+            <span
+              className="inline-block w-2 h-2 rounded-full"
+              style={{ background: "var(--color-accent)" }}
+            />
+            {ENTITY_TABS.find((t) => t.key === activeTab)?.label || activeTab}
+          </h3>
+          <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+            {items.length} rekordów
+          </span>
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="skeleton h-12 w-full rounded-lg" />
+            ))}
+          </div>
+        )}
+
+        {/* Error */}
+        {error && !loading && (
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-full"
+              style={{ background: "var(--color-error-soft)" }}
+            >
+              <svg className="h-6 w-6" style={{ color: "var(--color-error)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <p className="font-medium" style={{ color: "var(--color-error)" }}>Błąd</p>
+            <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>{error}</p>
+            <button
+              type="button"
+              onClick={() => loadData(activeTab)}
+              className="btn-ghost mt-2"
+            >
+              Spróbuj ponownie
+            </button>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && items.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-full"
+              style={{ background: "var(--color-accent-glow)" }}
+            >
+              <svg className="h-6 w-6" style={{ color: "var(--color-accent-soft)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+              </svg>
+            </div>
+            <p className="font-medium" style={{ color: "var(--color-text-secondary)" }}>
+              Brak danych
+            </p>
+            <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+              Kliknij &quot;Dodaj&quot;, aby utworzyć pierwszy rekord.
+            </p>
+          </div>
+        )}
+
+        {/* Data */}
+        {!loading && !error && items.length > 0 && (
+          <DataTable
+            items={items}
+            onEdit={handleEditClick}
+            onDelete={handleDeleteClick}
+          />
+        )}
+      </div>
+
+      {/* Modals */}
+      <AddModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        entityType={activeTab}
+        onSuccess={(newData) => addData(activeTab, newData)}
+        initialState={INITIAL_STATES[activeTab]}
+      />
+      <DeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setItemToDelete(null);
+        }}
+        onConfirm={confirmDelete}
+        itemName={itemToDelete?.name}
+        isDeleting={isDeleting}
+      />
+      <EditModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setItemToEdit(null);
+        }}
+        onSuccess={(updatedData) => {
+          if (itemToEdit && typeof itemToEdit === "object" && "id" in itemToEdit) {
+            updateData(activeTab, (itemToEdit as Record<string, number>).id, updatedData);
+          }
+        }}
+        entityType={activeTab}
+        initialData={itemToEdit}
+      />
+    </div>
+  );
 }

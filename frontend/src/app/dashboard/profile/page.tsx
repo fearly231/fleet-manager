@@ -14,8 +14,8 @@ export default function ProfilePage() {
       try {
         const userData = await api.getCurrentUser();
         setUser(userData);
-      } catch (err) {
-        console.error("Failed to fetch user data", err);
+      } catch {
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -25,53 +25,93 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Twój profil</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h1
+          className="text-2xl sm:text-3xl font-bold tracking-tight"
+          style={{
+            background: "linear-gradient(135deg, var(--color-text-primary) 0%, var(--color-accent-soft) 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}
+        >
+          Twój profil
+        </h1>
         <Link
           href="/dashboard"
-          className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+          className="text-sm font-medium hover:underline inline-flex items-center gap-1"
+          style={{ color: "var(--color-accent-soft)" }}
         >
-          &larr; Powrót do menu
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Powrót do menu
         </Link>
       </div>
-      
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-        <div className="px-4 py-5 sm:px-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900">Informacje o użytkowniku</h3>
-          <p className="mt-1 max-w-2xl text-sm text-gray-500">Szczegóły profilu i dane kontaktowe.</p>
+
+      <div className="glass-surface rounded-2xl overflow-hidden">
+        <div className="p-6 border-b" style={{ borderColor: "var(--color-border)" }}>
+          <h3 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            Informacje o użytkowniku
+          </h3>
+          <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+            Szczegóły profilu i dane kontaktowe.
+          </p>
         </div>
-        <div className="border-t border-gray-200 px-4 py-5 sm:p-0">
-          <dl className="sm:divide-y sm:divide-gray-200">
-            <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Imię i nazwisko</dt>
-              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                {loading ? "Ładowanie..." : user?.name || "Nieznane"}
+
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="skeleton h-8 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <dl className="divide-y" style={{ borderColor: "var(--color-border)" }}>
+            {/* Avatar & name row */}
+            <div className="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+              <dt className="text-sm font-medium" style={{ color: "var(--color-text-muted)" }}>
+                Awatar
+              </dt>
+              <dd className="mt-1 sm:mt-0 sm:col-span-2 flex items-center gap-3">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold"
+                  style={{
+                    background: "var(--color-accent-glow)",
+                    color: "var(--color-accent-soft)",
+                  }}
+                >
+                  {user?.name?.charAt(0).toUpperCase() || "?"}
+                </div>
+                <span style={{ color: "var(--color-text-primary)" }}>{user?.name || "—"}</span>
               </dd>
             </div>
-            <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Email</dt>
-              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                {loading ? "Ładowanie..." : user?.email || "Nieznane"}
+
+            <div className="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+              <dt className="text-sm font-medium" style={{ color: "var(--color-text-muted)" }}>
+                Email
+              </dt>
+              <dd className="mt-1 sm:mt-0 sm:col-span-2" style={{ color: "var(--color-text-secondary)" }}>
+                {user?.email || "—"}
               </dd>
             </div>
-            <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">Rola</dt>
-              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                {user?.is_superuser ? "Administrator" : "Pracownik"}
+
+            <div className="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+              <dt className="text-sm font-medium" style={{ color: "var(--color-text-muted)" }}>
+                Rola
+              </dt>
+              <dd className="mt-1 sm:mt-0 sm:col-span-2">
+                <span
+                  className="badge"
+                  style={{
+                    background: user?.is_superuser ? "var(--color-accent-glow)" : "var(--color-success-soft)",
+                    color: user?.is_superuser ? "var(--color-accent-soft)" : "var(--color-success)",
+                  }}
+                >
+                  {user?.is_superuser ? "Administrator" : "Pracownik"}
+                </span>
               </dd>
             </div>
           </dl>
-        </div>
-      </div>
-      
-      <div className="flex justify-end">
-        <button
-          type="button"
-          disabled={loading}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400"
-        >
-          Edytuj dane
-        </button>
+        )}
       </div>
     </div>
   );
