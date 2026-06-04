@@ -5,27 +5,30 @@ import { api } from "@/lib/api";
 import Link from "next/link";
 import { VehiclePublic } from "@/types/vehicle_types";
 import type { Purpose } from "@/types/reservation_types";
+import { useToast } from "@/components/ui/Toast";
 
 export default function VehiclesPage() {
   const [vehicles, setVehicles] = useState<VehiclePublic[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Form state
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [purpose, setPurpose] = useState<Purpose>("business");
   const [price, setPrice] = useState("0");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const vehiclesData = await api.getVehicles();
         setVehicles(vehiclesData.items || []);
-      } catch (error) {
-        console.error("Failed to fetch vehicles", error);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Nie udało się pobrać pojazdów.");
       } finally {
         setLoading(false);
       }
@@ -33,18 +36,22 @@ export default function VehiclesPage() {
     fetchData();
   }, []);
 
+  const validate = () => {
+    const errors: Record<string, string> = {};
+    if (!startDate) errors.startDate = "Data rozpoczęcia jest wymagana.";
+    if (!endDate) errors.endDate = "Data zakończenia jest wymagana.";
+    if (!selectedVehicle) errors.selectedVehicle = "Wybierz pojazd.";
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage(null);
 
-    if (!startDate || !endDate || !selectedVehicle) {
-      setMessage({ type: "error", text: "Proszę wypełnić wszystkie pola." });
-      return;
-    }
+    if (!validate()) return;
 
     setSubmitting(true);
     try {
-      // Get current user to get worker_id
       const user = await api.getCurrentUser();
 
       await api.createReservation({
@@ -55,17 +62,15 @@ export default function VehiclesPage() {
         purpose: purpose,
         price: parseFloat(price),
       });
-      setMessage({ type: "success", text: "Rezerwacja została pomyślnie utworzona!" });
-      // Reset form
+
+      toast("success", "Rezerwacja została pomyślnie utworzona!");
       setStartDate("");
       setEndDate("");
       setSelectedVehicle("");
       setPrice("0");
-    } catch (error) {
-      setMessage({
-        type: "error",
-        text: error instanceof Error ? error.message : "Błąd podczas tworzenia rezerwacji.",
-      });
+      setFieldErrors({});
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Błąd podczas tworzenia rezerwacji.");
     } finally {
       setSubmitting(false);
     }
@@ -73,61 +78,85 @@ export default function VehiclesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Pojazdy i rezerwacje</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight"
+          style={{
+            background: "linear-gradient(135deg, var(--color-text-primary) 0%, var(--color-accent-soft) 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}
+        >
+          Pojazdy i rezerwacje
+        </h1>
         <Link
           href="/dashboard"
-          className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+          className="text-sm font-medium hover:underline inline-flex items-center gap-1"
+          style={{ color: "var(--color-accent-soft)" }}
         >
-          &larr; Powrót do menu
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Powrót do menu
         </Link>
       </div>
-      <div className="bg-white px-4 py-5 shadow sm:rounded-lg sm:p-6">
-        <div className="md:grid md:grid-cols-3 md:gap-6">
+
+      <div className="glass-surface rounded-2xl p-6">
+        <div className="md:grid md:grid-cols-3 md:gap-8">
           <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">Nowa rezerwacja</h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <h3 className="text-lg font-semibold mb-2" style={{ color: "var(--color-text-primary)" }}>
+              Nowa rezerwacja
+            </h3>
+            <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
               Wybierz pojazd oraz termin, aby zarezerwować samochód z floty.
             </p>
           </div>
-          <div className="mt-5 md:col-span-2 md:mt-0">
-            <form onSubmit={handleSubmit}>
-              <div className="grid grid-cols-6 gap-6">
-                <div className="col-span-6 sm:col-span-3">
-                  <label htmlFor="start-date" className="block text-sm font-medium text-gray-700">
+
+          <div className="mt-6 md:col-span-2 md:mt-0">
+            <form onSubmit={handleSubmit} noValidate className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label htmlFor="start-date" className="block text-sm font-medium mb-1.5" style={{ color: "var(--color-text-secondary)" }}>
                     Planowane rozpoczęcie
                   </label>
                   <input
                     type="datetime-local"
                     id="start-date"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className={`input-dark ${fieldErrors.startDate ? "input-error" : ""}`}
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      if (fieldErrors.startDate) setFieldErrors((p) => ({ ...p, startDate: "" }));
+                    }}
                     required
                   />
+                  {fieldErrors.startDate && <p className="field-error">{fieldErrors.startDate}</p>}
                 </div>
 
-                <div className="col-span-6 sm:col-span-3">
-                  <label htmlFor="end-date" className="block text-sm font-medium text-gray-700">
+                <div>
+                  <label htmlFor="end-date" className="block text-sm font-medium mb-1.5" style={{ color: "var(--color-text-secondary)" }}>
                     Planowane zakończenie
                   </label>
                   <input
                     type="datetime-local"
                     id="end-date"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className={`input-dark ${fieldErrors.endDate ? "input-error" : ""}`}
                     value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      if (fieldErrors.endDate) setFieldErrors((p) => ({ ...p, endDate: "" }));
+                    }}
                     required
                   />
+                  {fieldErrors.endDate && <p className="field-error">{fieldErrors.endDate}</p>}
                 </div>
 
-                <div className="col-span-6 sm:col-span-3">
-                  <label htmlFor="purpose" className="block text-sm font-medium text-gray-700">
+                <div>
+                  <label htmlFor="purpose" className="block text-sm font-medium mb-1.5" style={{ color: "var(--color-text-secondary)" }}>
                     Cel rezerwacji
                   </label>
                   <select
                     id="purpose"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="input-dark"
                     value={purpose}
                     onChange={(e) => setPurpose(e.target.value as Purpose)}
                   >
@@ -136,8 +165,8 @@ export default function VehiclesPage() {
                   </select>
                 </div>
 
-                <div className="col-span-6 sm:col-span-3">
-                  <label htmlFor="price" className="block text-sm font-medium text-gray-700">
+                <div>
+                  <label htmlFor="price" className="block text-sm font-medium mb-1.5" style={{ color: "var(--color-text-secondary)" }}>
                     Szacowany koszt (PLN)
                   </label>
                   <input
@@ -145,52 +174,64 @@ export default function VehiclesPage() {
                     id="price"
                     min="0"
                     step="0.01"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="input-dark"
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
                     required
                   />
                 </div>
 
-                <div className="col-span-6">
-                  <label htmlFor="vehicle" className="block text-sm font-medium text-gray-700">
+                <div className="sm:col-span-2">
+                  <label htmlFor="vehicle" className="block text-sm font-medium mb-1.5" style={{ color: "var(--color-text-secondary)" }}>
                     Wybierz samochód
                   </label>
                   <select
                     id="vehicle"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className={`input-dark ${fieldErrors.selectedVehicle ? "input-error" : ""}`}
                     value={selectedVehicle}
-                    onChange={(e) => setSelectedVehicle(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedVehicle(e.target.value);
+                      if (fieldErrors.selectedVehicle) setFieldErrors((p) => ({ ...p, selectedVehicle: "" }));
+                    }}
                     required
                     disabled={loading}
                   >
-                    <option value="">Wybierz pojazd...</option>
+                    <option value="">{loading ? "Ładowanie pojazdów..." : "Wybierz pojazd..."}</option>
                     {vehicles.map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.description || `Pojazd #${v.id}`}
                       </option>
                     ))}
                   </select>
+                  {fieldErrors.selectedVehicle && <p className="field-error">{fieldErrors.selectedVehicle}</p>}
                 </div>
               </div>
 
-              {message && (
-                <div
-                  className={`mt-4 p-3 rounded-md text-sm ${
-                    message.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"
-                  }`}
+              {error && (
+                <div className="flex items-center gap-2 rounded-lg p-3 text-sm"
+                  style={{ background: "var(--color-error-soft)", color: "var(--color-error)", border: "1px solid rgba(248, 113, 113, 0.2)" }}
                 >
-                  {message.text}
+                  <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  {error}
                 </div>
               )}
 
-              <div className="mt-6">
+              <div>
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-indigo-400"
+                  disabled={submitting || loading}
+                  className="btn-primary"
                 >
-                  {submitting ? "Przetwarzanie..." : "Potwierdź rezerwację"}
+                  {submitting ? (
+                    <>
+                      <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                      Przetwarzanie...
+                    </>
+                  ) : (
+                    "Potwierdź rezerwację"
+                  )}
                 </button>
               </div>
             </form>

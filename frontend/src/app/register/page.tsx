@@ -10,93 +10,156 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; email?: string; password?: string }>({});
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  const validate = () => {
+    const errors: { name?: string; email?: string; password?: string } = {};
+    const normalized = email.trim().toLowerCase();
+
+    if (!name.trim()) errors.name = "Imię jest wymagane.";
+    if (!normalized.includes("@")) errors.email = "Niepoprawny format email.";
+    if (password.length < 6) errors.password = "Hasło musi mieć co najmniej 6 znaków.";
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (!name) return setError("Imię jest wymagane.");
-    if (!normalizedEmail.includes("@")) return setError("Niepoprawny format email.");
-    if (password.length < 6) return setError("Hasło musi mieć co najmniej 6 znaków.");
+    if (!validate()) return;
 
     setLoading(true);
     try {
-      await api.register(name, normalizedEmail, password);
+      await api.register(name.trim(), email.trim().toLowerCase(), password);
       router.push("/login?registered=true");
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Błąd podczas rejestracji.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Błąd podczas rejestracji.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md space-y-8 bg-white p-8 rounded-xl shadow-lg">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+    <div className="flex min-h-screen items-center justify-center px-4 py-12">
+      <div
+        className="fixed inset-0 pointer-events-none"
+        aria-hidden="true"
+      >
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[40rem] h-[40rem] rounded-full opacity-10 blur-[120px]"
+          style={{ background: "radial-gradient(circle, var(--color-accent) 0%, transparent 70%)" }}
+        />
+      </div>
+
+      <div className="glass-elevated w-full max-w-md rounded-2xl p-8 relative z-10">
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl"
+            style={{ background: "var(--color-accent-glow)" }}
+          >
+            <svg className="h-6 w-6" style={{ color: "var(--color-accent-soft)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold" style={{ color: "var(--color-text-primary)" }}>
             Zarejestruj się
           </h2>
+          <p className="mt-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+            Utwórz konto w systemie zarządzania flotą
+          </p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm space-y-4">
-            <div>
-              <input
-                type="text"
-                required
-                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Imię i nazwisko"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div>
-              <input
-                type="email"
-                required
-                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Adres email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <input
-                type="password"
-                required
-                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Hasło"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
+
+        <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium mb-1.5" style={{ color: "var(--color-text-secondary)" }}>
+              Imię i nazwisko
+            </label>
+            <input
+              id="name"
+              type="text"
+              autoComplete="name"
+              required
+              className={`input-dark ${fieldErrors.name ? "input-error" : ""}`}
+              placeholder="Jan Kowalski"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (fieldErrors.name) setFieldErrors((p) => ({ ...p, name: undefined }));
+              }}
+            />
+            {fieldErrors.name && <p className="field-error">{fieldErrors.name}</p>}
+          </div>
+
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium mb-1.5" style={{ color: "var(--color-text-secondary)" }}>
+              Adres email
+            </label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              required
+              className={`input-dark ${fieldErrors.email ? "input-error" : ""}`}
+              placeholder="twoj@email.com"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: undefined }));
+              }}
+            />
+            {fieldErrors.email && <p className="field-error">{fieldErrors.email}</p>}
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium mb-1.5" style={{ color: "var(--color-text-secondary)" }}>
+              Hasło
+            </label>
+            <input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              required
+              className={`input-dark ${fieldErrors.password ? "input-error" : ""}`}
+              placeholder="Minimum 6 znaków"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (fieldErrors.password) setFieldErrors((p) => ({ ...p, password: undefined }));
+              }}
+            />
+            {fieldErrors.password && <p className="field-error">{fieldErrors.password}</p>}
           </div>
 
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
+            <div className="flex items-center gap-2 rounded-lg p-3 text-sm"
+              style={{ background: "var(--color-error-soft)", color: "var(--color-error)", border: "1px solid rgba(248, 113, 113, 0.2)" }}
+            >
+              <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
               {error}
             </div>
           )}
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-indigo-400"
-            >
-              {loading ? "Tworzenie konta..." : "Zarejestruj się"}
-            </button>
-          </div>
+          <button type="submit" disabled={loading} className="btn-primary w-full">
+            {loading ? (
+              <>
+                <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                Tworzenie konta...
+              </>
+            ) : (
+              "Zarejestruj się"
+            )}
+          </button>
 
-          <div className="text-center">
-            <Link href="/login" className="text-sm text-indigo-600 hover:text-indigo-500">
-              Masz już konto? Zaloguj się
+          <p className="text-center text-sm" style={{ color: "var(--color-text-secondary)" }}>
+            Masz już konto?{" "}
+            <Link href="/login" className="font-medium hover:underline" style={{ color: "var(--color-accent-soft)" }}>
+              Zaloguj się
             </Link>
-          </div>
+          </p>
         </form>
       </div>
     </div>
