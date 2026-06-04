@@ -36,10 +36,10 @@ const ENTITY_TABS: EntityTab[] = [
   { key: "Versions", label: "Wersje" },
 ];
 
-function extractItems(data: unknown): unknown[] {
-  if (Array.isArray(data)) return data;
-  if (data && typeof data === "object" && "items" in data) return (data as Record<string, unknown>).items as unknown[];
-  if (data && typeof data === "object" && "data" in data) return (data as Record<string, unknown>).data as unknown[];
+function extractItems(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data)) return data as Record<string, unknown>[];
+  if (data && typeof data === "object" && "items" in data) return (data as Record<string, unknown>).items as Record<string, unknown>[];
+  if (data && typeof data === "object" && "data" in data) return (data as Record<string, unknown>).data as Record<string, unknown>[];
   return [];
 }
 
@@ -53,7 +53,7 @@ export default function Dashboard() {
   const [itemToDelete, setItemToDelete] = useState<{ id: number; name?: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [itemToEdit, setItemToEdit] = useState<unknown>(null);
+  const [itemToEdit, setItemToEdit] = useState<Record<string, unknown> | null>(null);
   const { toast } = useToast();
 
   const loadData = async (entity: EntityType) => {
@@ -169,7 +169,7 @@ export default function Dashboard() {
   }, [activeTab]);
 
   const handleEditClick = (item: unknown) => {
-    setItemToEdit(item);
+    setItemToEdit(item as Record<string, unknown>);
     setIsEditModalOpen(true);
   };
 
