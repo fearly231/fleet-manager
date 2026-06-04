@@ -19,6 +19,8 @@ class Worker(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String, nullable=False)
+    is_superuser: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     caretakers: Mapped[list["Caretaker"]] = relationship(back_populates="worker")
     reservations: Mapped[list["Reservation"]] = relationship(back_populates="worker")
@@ -26,16 +28,19 @@ class Worker(Base):
 
 class WorkerBase(BaseModel):
     name: str = Field(max_length=100)
-    email: EmailStr = Field(max_length=120)
+    email: str = Field(max_length=120)
+    is_superuser: bool = False
 
 
 class WorkerCreate(WorkerBase):
-    pass
+    password: str = Field(min_length=6)
 
 
 class WorkerUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=100)
-    email: EmailStr | None = Field(default=None, max_length=120)
+    email: str | None = Field(default=None, max_length=120)
+    password: str | None = Field(default=None, min_length=6)
+    is_superuser: bool | None = None
 
 
 class WorkerPublic(WorkerBase):

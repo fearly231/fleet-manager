@@ -5,6 +5,11 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    environment:
+      - SECRET_KEY=dev_secret_key_change_me_in_production
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
 
   frontend:
     build:
@@ -16,3 +21,7 @@ services:
       - backend
     ports:
       - "3000:3000"
+    command: npm run dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules

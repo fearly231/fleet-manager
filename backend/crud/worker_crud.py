@@ -10,18 +10,33 @@ from models.worker_model import (
 )
 
 
-def create_worker(*, session: Session, worker_in: WorkerCreate) -> WorkerPublic:
+from core.security import get_password_hash
+
+
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+def create_worker(*, session: Session, worker_in: WorkerCreate) -> Worker:
     """
     Creates a new worker in the database using the provided data.
-        The worker_in parameter is expected to be a Pydantic model (WorkerCreate) that contains the data for the new worker.
-        The function converts this Pydantic model into a SQLAlchemy model (Worker), adds it to the session, commits the transaction, and refreshes the instance to get the generated ID.
-        Finally, it returns the newly created worker object.
     """
-    db_obj = Worker(name=worker_in.name, email=worker_in.email)
+    db_obj = Worker(
+        name=worker_in.name,
+        email=normalize_email(worker_in.email),
+        hashed_password=get_password_hash(worker_in.password)
+    )
     session.add(db_obj)
     session.commit()
     session.refresh(db_obj)
     return db_obj
+
+
+def get_worker_by_email(*, session: Session, email: str) -> Worker | None:
+    """
+    Finds a worker by its email in the database. Returns None if not found.
+    """
+    normalized_email = normalize_email(email)
+    return session.scalar(select(Worker).where(func.lower(Worker.email) == normalized_email))
 
 
 def get_all_workers(

@@ -30,7 +30,13 @@ export default function AddModal({
     const fields = Object.keys(initialState);
     const optionalFieldsForEntity = OPTIONAL_FIELDS[entityType as EntityType] || new Set();
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const getInputType = (field: string) => {
+        if (field.includes("date")) return "datetime-local";
+        if (field === "price" || field.endsWith("_id") || field === "distance") return "number";
+        return "text";
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFormData({
             ...formData,
             [e.target.name]: e.target.value,
@@ -41,10 +47,12 @@ export default function AddModal({
         e.preventDefault();
         const normalizedData = Object.fromEntries(
             Object.entries(formData).map(([key, value]) => {
-                if (key.endsWith("_id") && value !== "") {
+                if ((key.endsWith("_id") || key === "price" || key === "distance") && value !== "") {
                     return [key, Number(value)];
                 }
-
+                if (key.includes("date") && value) {
+                    return [key, new Date(value as string).toISOString()];
+                }
                 return [key, value];
             }),
         );
@@ -94,15 +102,45 @@ export default function AddModal({
                                     {field.replace("_", " ")}
                                     {isOptional && <span className="text-gray-400 text-xs ml-1">(optional)</span>}
                                 </label>
-                                <input
-                                    id={field}
-                                    type={field.endsWith("_id") ? "number" : "text"}
-                                    name={field}
-                                    value={formData[field] || ""}
-                                    onChange={handleChange}
-                                    className="w-full border border-gray-300 rounded-lg px-4 py-2 outline-none transition-all focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                                    required={!isOptional}
-                                />
+                                {field === "purpose" ? (
+                                    <select
+                                        id={field}
+                                        name={field}
+                                        value={formData[field] || "business"}
+                                        onChange={handleChange}
+                                        className="w-full border border-gray-300 rounded-lg px-4 py-2 outline-none transition-all focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                                        required={!isOptional}
+                                    >
+                                        <option value="business">Business</option>
+                                        <option value="private">Private</option>
+                                    </select>
+                                ) : field === "state" ? (
+                                    <select
+                                        id={field}
+                                        name={field}
+                                        value={formData[field] || "created"}
+                                        onChange={handleChange}
+                                        className="w-full border border-gray-300 rounded-lg px-4 py-2 outline-none transition-all focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                                        required={!isOptional}
+                                    >
+                                        <option value="created">Created</option>
+                                        <option value="accepted">Accepted</option>
+                                        <option value="in_progress">In Progress</option>
+                                        <option value="completed">Completed</option>
+                                        <option value="canceled">Canceled</option>
+                                    </select>
+                                ) : (
+                                    <input
+                                        id={field}
+                                        type={getInputType(field)}
+                                        step={field === "price" || field === "distance" ? "0.01" : undefined}
+                                        name={field}
+                                        value={formData[field] || ""}
+                                        onChange={handleChange}
+                                        className="w-full border border-gray-300 rounded-lg px-4 py-2 outline-none transition-all focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                                        required={!isOptional}
+                                    />
+                                )}
                             </div>
                         );
                     })}
