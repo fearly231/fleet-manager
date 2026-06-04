@@ -10,6 +10,7 @@ import { setofequipmentApi } from "@/lib/api/set_of_equipment";
 import { vehmodelApi } from "@/lib/api/vehmodel";
 import { versionApi } from "@/lib/api/version";
 import { reservationApi } from "@/lib/api/reservation";
+import { caretakerApi } from '@/lib/api/caretaker';
 import { INITIAL_STATES } from "@/lib/forms";
 import type { EntityType } from "@/types";
 import { useToast } from "@/components/ui/Toast";
