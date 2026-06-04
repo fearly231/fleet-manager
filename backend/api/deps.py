@@ -27,12 +27,18 @@ def get_current_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Could not validate credentials",
             )
+        worker_id = int(str(user_id).strip())
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Could not validate credentials",
+        )
     except (JWTError, ValidationError):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Could not validate credentials",
         )
-    user = worker_crud.get_worker_by_id(session=db, worker_id=int(user_id))
+    user = worker_crud.get_worker_by_id(session=db, worker_id=worker_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user

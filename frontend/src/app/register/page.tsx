@@ -17,16 +17,18 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     if (!name) return setError("Imię jest wymagane.");
-    if (!email.includes("@")) return setError("Niepoprawny format email.");
+    if (!normalizedEmail.includes("@")) return setError("Niepoprawny format email.");
     if (password.length < 6) return setError("Hasło musi mieć co najmniej 6 znaków.");
 
     setLoading(true);
     try {
-      await api.register(name, email, password);
+      await api.register(name, normalizedEmail, password);
       router.push("/login?registered=true");
-    } catch (err: any) {
-      setError(err.message || "Błąd podczas rejestracji.");
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Błąd podczas rejestracji.");
     } finally {
       setLoading(false);
     }

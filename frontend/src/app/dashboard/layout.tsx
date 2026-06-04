@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, subscribeToAuthChanges } from "@/lib/api";
 import { WorkerPublic } from "@/types/worker_types";
 
 export default function DashboardLayout({
@@ -18,12 +18,24 @@ export default function DashboardLayout({
       try {
         const userData = await api.getCurrentUser();
         setUser(userData);
-      } catch (err) {
-        // If unauthorized, redirect to login (handled in api.ts but good to have here too)
+      } catch {
+        setUser(null);
         router.push("/login");
       }
     };
+
+    const unsubscribe = subscribeToAuthChanges(() => {
+      if (api.hasToken()) {
+        fetchUser();
+        return;
+      }
+
+      setUser(null);
+    });
+
     fetchUser();
+
+    return unsubscribe;
   }, [router]);
 
   const handleLogout = () => {

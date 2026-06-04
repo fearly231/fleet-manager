@@ -12,13 +12,17 @@ from models.worker_model import (
 
 from core.security import get_password_hash
 
+
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
+
 def create_worker(*, session: Session, worker_in: WorkerCreate) -> Worker:
     """
     Creates a new worker in the database using the provided data.
     """
     db_obj = Worker(
-        name=worker_in.name, 
-        email=worker_in.email,
+        name=worker_in.name,
+        email=normalize_email(worker_in.email),
         hashed_password=get_password_hash(worker_in.password)
     )
     session.add(db_obj)
@@ -31,7 +35,8 @@ def get_worker_by_email(*, session: Session, email: str) -> Worker | None:
     """
     Finds a worker by its email in the database. Returns None if not found.
     """
-    return session.scalar(select(Worker).where(Worker.email == email))
+    normalized_email = normalize_email(email)
+    return session.scalar(select(Worker).where(func.lower(Worker.email) == normalized_email))
 
 
 def get_all_workers(

@@ -1,9 +1,12 @@
 from datetime import datetime, timedelta, timezone
+import os
 from typing import Any
 from jose import jwt
 import bcrypt
 
-SECRET_KEY = "SUPER_SECRET_KEY_CHANGE_ME_IN_PRODUCTION"
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY must be set in the environment")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 

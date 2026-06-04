@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import Link from "next/link";
 import { VehiclePublic } from "@/types/vehicle_types";
-import { VehModelPublic } from "@/types/vehmodel_types";
+import type { Purpose } from "@/types/reservation_types";
 
 export default function VehiclesPage() {
-  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [vehicles, setVehicles] = useState<VehiclePublic[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -16,7 +16,7 @@ export default function VehiclesPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [selectedVehicle, setSelectedVehicle] = useState("");
-  const [purpose, setPurpose] = useState("business");
+  const [purpose, setPurpose] = useState<Purpose>("business");
   const [price, setPrice] = useState("0");
 
   useEffect(() => {
@@ -24,8 +24,8 @@ export default function VehiclesPage() {
       try {
         const vehiclesData = await api.getVehicles();
         setVehicles(vehiclesData.items || []);
-      } catch (err) {
-        console.error("Failed to fetch vehicles", err);
+      } catch (error) {
+        console.error("Failed to fetch vehicles", error);
       } finally {
         setLoading(false);
       }
@@ -46,7 +46,7 @@ export default function VehiclesPage() {
     try {
       // Get current user to get worker_id
       const user = await api.getCurrentUser();
-      
+
       await api.createReservation({
         vehicle_id: parseInt(selectedVehicle),
         worker_id: user.id,
@@ -61,8 +61,11 @@ export default function VehiclesPage() {
       setEndDate("");
       setSelectedVehicle("");
       setPrice("0");
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "Błąd podczas tworzenia rezerwacji." });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Błąd podczas tworzenia rezerwacji.",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -126,7 +129,7 @@ export default function VehiclesPage() {
                     id="purpose"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     value={purpose}
-                    onChange={(e) => setPurpose(e.target.value)}
+                    onChange={(e) => setPurpose(e.target.value as Purpose)}
                   >
                     <option value="business">Służbowy (business)</option>
                     <option value="private">Prywatny (private)</option>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import Link from "next/link";
@@ -9,23 +9,18 @@ function LoginContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-
-  useEffect(() => {
-    if (searchParams.get("registered")) {
-      setSuccess("Konto zostało utworzone! Możesz się teraz zalogować.");
-    }
-  }, [searchParams]);
+  const success = searchParams.get("registered") ? "Konto zostało utworzone! Możesz się teraz zalogować." : "";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setSuccess("");
 
-    if (!email || !email.includes("@")) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !normalizedEmail.includes("@")) {
       setError("Proszę podać poprawny adres email.");
       return;
     }
@@ -36,10 +31,10 @@ function LoginContent() {
 
     setLoading(true);
     try {
-      await api.login(email, password);
+      await api.login(normalizedEmail, password);
       router.push("/dashboard");
-    } catch (err: any) {
-      setError(err.message || "Błąd logowania. Spróbuj ponownie.");
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Błąd logowania. Spróbuj ponownie.");
     } finally {
       setLoading(false);
     }

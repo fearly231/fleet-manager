@@ -1,6 +1,29 @@
 import { WorkerPublic } from "@/types/worker_types";
+import { VehiclesPublic } from "@/types/vehicle_types";
+import { ReservationCreate, ReservationPublic } from "@/types/reservation_types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+type AuthListener = () => void;
+
+const authListeners = new Set<AuthListener>();
+
+function emitAuthChange() {
+  for (const listener of authListeners) {
+    listener();
+  }
+}
+
+export function subscribeToAuthChanges(listener: AuthListener) {
+  authListeners.add(listener);
+  return () => {
+    authListeners.delete(listener);
+  };
+}
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
 
 class ApiService {
   private get token(): string | null {
@@ -18,6 +41,10 @@ class ApiService {
         localStorage.removeItem("token");
       }
     }
+  }
+
+  hasToken(): boolean {
+    return this.token !== null;
   }
 
   private async request<T>(
@@ -39,6 +66,7 @@ class ApiService {
 
     if (response.status === 401) {
       this.token = null;
+      emitAuthChange();
       if (typeof window !== "undefined") {
         window.location.href = "/login";
       }
@@ -55,7 +83,7 @@ class ApiService {
 
   async login(email: string, password: string): Promise<{ access_token: string; token_type: string }> {
     const formData = new FormData();
-    formData.append("username", email);
+    formData.append("username", normalizeEmail(email));
     formData.append("password", password);
 
     const data = await this.request<{ access_token: string; token_type: string }>("/api/v1/login/access-token", {
@@ -64,11 +92,13 @@ class ApiService {
     });
 
     this.token = data.access_token;
+    emitAuthChange();
     return data;
   }
 
   async logout() {
     this.token = null;
+    emitAuthChange();
     if (typeof window !== "undefined") {
       window.location.href = "/login";
     }
@@ -77,7 +107,7 @@ class ApiService {
   async register(name: string, email: string, password: string): Promise<WorkerPublic> {
     return this.request<WorkerPublic>("/api/v1/login/register", {
       method: "POST",
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email: normalizeEmail(email), password }),
     });
   }
 
@@ -85,12 +115,12 @@ class ApiService {
     return this.request<WorkerPublic>("/api/v1/login/users/me");
   }
 
-  async getVehicles(): Promise<any> {
-    return this.request("/api/v1/vehicle/");
+  async getVehicles(): Promise<VehiclesPublic> {
+    return this.request<VehiclesPublic>("/api/v1/vehicle/");
   }
 
-  async createReservation(reservation: any): Promise<any> {
-    return this.request("/api/v1/reservation/", {
+  async createReservation(reservation: ReservationCreate): Promise<ReservationPublic> {
+    return this.request<ReservationPublic>("/api/v1/reservation/", {
       method: "POST",
       body: JSON.stringify(reservation),
     });
