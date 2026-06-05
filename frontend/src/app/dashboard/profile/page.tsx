@@ -37,6 +37,10 @@ export default function ProfilePage() {
       setChangeError("Hasło musi mieć co najmniej 6 znaków.");
       return;
     }
+    if (oldPassword === newPassword) {
+      setChangeError("Nowe hasło nie może być takie samo jak aktualne.");
+      return;
+    }
     if (newPassword !== confirmNewPassword) {
       setChangeError("Hasła nie są takie same.");
       return;

@@ -69,10 +69,13 @@ def change_password(
     db: Session = Depends(get_db),
     current_user: Worker = Depends(deps.get_current_user),
 ):
-    # Verify old password
+    
     if not security.verify_password(payload.old_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail='Incorrect current password')
 
+    
+    if security.verify_password(payload.new_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail='New password must be different from current password')
     worker_crud.update_password(session=db, db_worker=current_user, new_password=payload.new_password)
     return {"message": "Hasło zostało zmienione"}
 
