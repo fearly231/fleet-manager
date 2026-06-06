@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, createContext, useContext } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
 import { api, subscribeToAuthChanges } from "@/lib/api";
 import { WorkerPublic } from "@/types/worker_types";
 import { ToastProvider } from "@/components/ui/Toast";
 import Link from "next/link";
+import React from "react";
+
+const UserContext = createContext<WorkerPublic | null>(null);
+export const useUser = () => useContext(UserContext);
 
 export default function DashboardLayout({
   children,
@@ -45,12 +49,17 @@ export default function DashboardLayout({
     api.logout();
   };
 
+
   const navLinks = [
     { href: "/dashboard", label: "Menu", exact: true },
     { href: "/dashboard/vehicles", label: "Pojazdy" },
     { href: "/dashboard/reservations", label: "Rezerwacje" },
     { href: "/dashboard/profile", label: "Profil" },
   ];
+
+  if (user?.is_superuser && !navLinks.some(link => link.href.includes("admin"))) {
+    navLinks.push({ href: "/dashboard/admin", label: "Panel Admina" });
+  }
 
   if (!user) {
     return (
@@ -73,7 +82,7 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen surface-base relative overflow-hidden">
-      {/* Cinematic Background Implementation (Global) */}
+      {/* Cinematic Background */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         <Image
           src="/assets/bg/hero-road.jpg"
@@ -98,10 +107,7 @@ export default function DashboardLayout({
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-3 group"
-            >
+            <Link href="/dashboard" className="flex items-center gap-3 group">
               <div
                 className="flex h-9 w-9 items-center justify-center rounded-lg transition-shadow group-hover:shadow-lg"
                 style={{
@@ -129,9 +135,7 @@ export default function DashboardLayout({
                     key={link.href}
                     href={link.href}
                     className={`relative px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? "text-white"
-                        : "hover:text-white"
+                      isActive ? "text-white" : "hover:text-white"
                     }`}
                     style={{
                       color: isActive ? "var(--color-text-primary)" : "var(--color-text-secondary)",
@@ -140,10 +144,7 @@ export default function DashboardLayout({
                   >
                     {link.label}
                     {isActive && (
-                      <span
-                        className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-5 rounded-full"
-                        style={{ background: "var(--color-accent)" }}
-                      />
+                      <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-5 rounded-full" style={{ background: "var(--color-accent)" }} />
                     )}
                   </Link>
                 );
@@ -167,10 +168,7 @@ export default function DashboardLayout({
                 </span>
               </div>
 
-              <button
-                onClick={handleLogout}
-                className="btn-ghost text-xs !px-3 !py-1.5"
-              >
+              <button onClick={handleLogout} className="btn-ghost text-xs !px-3 !py-1.5">
                 Wyloguj
               </button>
 
@@ -180,7 +178,6 @@ export default function DashboardLayout({
                 className="md:hidden p-2 rounded-lg"
                 style={{ color: "var(--color-text-secondary)" }}
                 aria-label="Toggle menu"
-                aria-expanded={mobileMenuOpen}
               >
                 {mobileMenuOpen ? (
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -224,7 +221,12 @@ export default function DashboardLayout({
 
       {/* Main content */}
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          {}
+          <UserContext.Provider value={user}>
+            {children}
+          </UserContext.Provider>
+        </ToastProvider>
       </main>
     </div>
   );

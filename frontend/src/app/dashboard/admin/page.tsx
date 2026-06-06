@@ -1,0 +1,244 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { makeApi } from "@/lib/api/make";
+import { vehicleApi } from "@/lib/api/vehicle";
+import { actionApi } from "@/lib/api/action";
+import { reservationApi } from "@/lib/api/reservation";
+import { vehmodelApi } from "@/lib/api/vehmodel"; 
+import { caretakerApi } from "@/lib/api/caretaker";
+
+import AddModal from "@/components/modals/AddModal";
+
+type EntityType = "Makes" | "Vehicles" | "Caretakers" | "Reservations" | "Actions" | "Models";
+
+export default function Dashboard() {
+    const [activeTab, setActiveTab] = useState<EntityType>("Makes");
+    const [data, setData] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    const loadData = async (entity: EntityType) => {
+        setLoading(true);
+        setError(null);
+        setData(null);
+
+        try {
+            let result;
+            switch (entity) {
+                case "Makes":
+                    result = await makeApi.getAll();
+                    break;
+                case "Vehicles":
+                    result = await vehicleApi.getAll();
+                    break;
+                case "Caretakers":
+                    result = await caretakerApi.getAll();
+                    break;
+                    case "Reservations":
+                    result = await reservationApi.getAll();
+                    break;
+                case "Actions":
+                    result = await actionApi.getAll();
+                    break;
+                case "Models":
+                    result = await vehmodelApi.getAll();
+                    break;
+               }
+            setData(result);
+        } catch (err: any) {
+            setError(err.message || "Nie udało się pobrać danych z bazy.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadData(activeTab);
+    }, [activeTab]);
+
+const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
+        setSaving(true);
+        setError(null);
+        try {
+            switch (activeTab) {
+                case "Makes":
+                   
+                    await makeApi.create(normalizedData as any);
+                    break;
+                
+                case "Models":
+                   
+                    await vehmodelApi.create(normalizedData as any);
+                    break;
+
+                case "Vehicles":
+                    await vehicleApi.create(normalizedData as any);
+                    break;
+
+                case "Caretakers":
+                    await caretakerApi.create(normalizedData as any);
+                    break;
+
+                case "Reservations":
+                    await reservationApi.create(normalizedData as any);
+                    break;
+
+                case "Actions":
+                    await actionApi.create(normalizedData as any);
+                    break;
+
+                default:
+                    throw new Error(`Obsługa zapisu dla "${activeTab}" nie została zaimplementowana.`);
+            }
+
+           
+            setIsAddModalOpen(false); 
+            await loadData(activeTab); 
+        } catch (err: any) {
+            
+            setError(err.message || "Wystąpił błąd podczas dodawania rekordu.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+
+    const tabs: EntityType[] = ["Makes", "Vehicles", "Caretakers", "Reservations", "Actions", "Models"];
+
+   
+    const getSingularLabel = (entity: EntityType) => {
+        if (entity === "Makes") return "Markę";
+        if (entity === "Vehicles") return "Pojazd";
+        if (entity === "Caretakers") return "Pracownika";
+        if (entity === "Reservations") return "Rezerwację";
+        if (entity === "Actions") return "Akcję";
+        if (entity === "Models") return "Model";
+        return entity;
+    };
+
+    return (
+        <div className="space-y-8 relative z-10 py-2">
+            {/* Nagłówek Panelu */}
+            <div className="space-y-2">
+                <nav className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-purple-400/80">
+                    <span>Zarządzanie</span>
+                    <span className="w-1 h-1 rounded-full bg-white/20" />
+                    <span className="text-white/40">Baza Danych</span>
+                </nav>
+                <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tighter">
+                    Fleet Data <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400">Manager</span>
+                </h2>
+            </div>
+
+            {/* Nawigacja zakładkowa dostosowana do ciemnego stylu glassmorphism */}
+            <div className="flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: "var(--color-border)" }}>
+                {tabs.map((tab) => {
+                    const isActive = activeTab === tab;
+                    return (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`px-5 py-2.5 rounded-xl text-sm font-bold tracking-tight transition-all duration-300 ${
+                                isActive
+                                    ? "text-white shadow-lg"
+                                    : "hover:text-white"
+                            }`}
+                            style={{
+                                color: isActive ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                                background: isActive ? "var(--color-overlay)" : "transparent",
+                                boxShadow: isActive ? "0 0 15px rgba(139, 92, 246, 0.15)" : "none",
+                            }}
+                        >
+                            {tab}
+                        </button>
+                    );
+                })}
+            </div>
+
+           
+            <div className="glass-elevated rounded-[2rem] p-6 sm:p-8 border border-white/5 relative overflow-hidden min-h-[400px]">
+                
+                
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-white/5">
+                    <h3 className="text-lg font-black text-white tracking-tight">
+                        Przeglądasz: <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400">{activeTab}</span>
+                    </h3>
+
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-[0_4px_15px_rgba(139,92,246,0.2)] transition-all duration-300 hover:-translate-y-0.5"
+                    >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Dodaj {getSingularLabel(activeTab)}
+                    </button>
+                </div>
+
+                {/* Stan Ładowania */}
+                {loading && (
+                    <div className="flex items-center gap-3 py-12 justify-center" style={{ color: "var(--color-accent-soft)" }}>
+                        <div 
+                            className="w-6 h-6 border-2 animate-spin rounded-full"
+                            style={{ borderColor: "var(--color-accent)", borderTopColor: "transparent" }}
+                        />
+                        <span className="text-sm font-medium">Pobieranie rekordów z bazy...</span>
+                    </div>
+                )}
+
+                {/* Komunikat o błędzie */}
+                {error && (
+                    <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/10 text-red-400 text-sm font-medium my-4">
+                        <span className="font-bold">Błąd połączenia:</span> {error}
+                    </div>
+                )}
+
+                {/* Prezentacja danych JSON */}
+                {!loading && !error && data && (
+                    <div className="space-y-4 animate-fadeIn">
+                        {data.total !== undefined && (
+                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                                Łączna liczba rekordów: <span className="text-white">{data.total}</span>
+                            </p>
+                        )}
+
+                        <div className="relative group">
+                            {/* Delikatna poświata pod kodem */}
+                            <div className="absolute inset-0 bg-purple-500/5 rounded-2xl blur-xl pointer-events-none" />
+                            
+                            <pre 
+                                className="relative z-10 border p-5 rounded-2xl overflow-x-auto text-xs sm:text-sm font-mono text-purple-200/90 leading-relaxed shadow-inner"
+                                style={{ 
+                                    background: "rgba(0, 0, 0, 0.2)", 
+                                    borderColor: "var(--color-border)" 
+                                }}
+                            >
+                                {JSON.stringify(data, null, 2)}
+                            </pre>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Modal dodawania nowych elementów */}
+            <AddModal
+                isOpen={isAddModalOpen}
+                onClose={() => setIsAddModalOpen(false)}
+                entityType={activeTab}
+                onSuccess={handleAddSubmit}
+                initialState={
+                    activeTab === "Makes" ? { name: "" } :
+                    activeTab === "Caretakers" ? { worker_id: "", vehicle_id: "", data_start: "" } :
+                    activeTab === "Vehicles" ? { registration_number: "", model_id: "", price: "" } :
+                    activeTab === "Models" ? { name: "", make_id: "" } :
+                    activeTab === "Reservations" ? { start_date: "", end_date: "", vehicle_id: "", caretaker_id: "", purpose: "business" } :
+                    activeTab === "Actions" ? { name: "", date: "", vehicle_id: "" } :
+                    { name: "" }
+                }
+            />
+        </div>
+    );
+}
