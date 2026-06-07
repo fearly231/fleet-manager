@@ -7,10 +7,16 @@ import { actionApi } from "@/lib/api/action";
 import { reservationApi } from "@/lib/api/reservation";
 import { vehmodelApi } from "@/lib/api/vehmodel"; 
 import { caretakerApi } from "@/lib/api/caretaker";
+import { equipmentApi } from "@/lib/api/equipment";
+import { setofequipmentApi } from "@/lib/api/set_of_equipment";
+import { versionApi } from "@/lib/api/version";
+import { workerApi } from "@/lib/api/worker";
+
 
 import AddModal from "@/components/modals/AddModal";
+import { isPerformedApi } from "@/lib/api/is_performed";
 
-type EntityType = "Makes" | "Vehicles" | "Caretakers" | "Reservations" | "Actions" | "Models";
+type EntityType = "Makes" |  "Models"| "Equipment" | "Set_Of_Equipment" | "Versions" | "Vehicles"  | "Workers" | "Caretakers" | "Reservations" | "Actions" | "IsPerformed" ;
 
 export default function Dashboard() {
     const [activeTab, setActiveTab] = useState<EntityType>("Makes");
@@ -31,8 +37,24 @@ export default function Dashboard() {
                 case "Makes":
                     result = await makeApi.getAll();
                     break;
+                case "Models":
+                    result = await vehmodelApi.getAll();
+                    break;
+              
+                case "Equipment":
+                    result = await equipmentApi.getAll();
+                    break;
+                case "Set_Of_Equipment":
+                    result = await setofequipmentApi.getAll();
+                    break;
+                case "Versions":
+                    result = await versionApi.getAll();
+                    break;
                 case "Vehicles":
                     result = await vehicleApi.getAll();
+                    break;
+                case "Workers":
+                    result = await workerApi.getAll();
                     break;
                 case "Caretakers":
                     result = await caretakerApi.getAll();
@@ -43,9 +65,10 @@ export default function Dashboard() {
                 case "Actions":
                     result = await actionApi.getAll();
                     break;
-                case "Models":
-                    result = await vehmodelApi.getAll();
+                case "IsPerformed":
+                    result = await isPerformedApi.getAll();
                     break;
+               
                }
             setData(result);
         } catch (err: any) {
@@ -63,6 +86,20 @@ const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
         setSaving(true);
         setError(null);
         try {
+            const preparedData: Record<string, any> = { ...normalizedData};
+
+            Object.keys(preparedData).forEach((key)=>{
+                const value = preparedData[key];
+                if(typeof value === "string"){
+                    if(key.endsWith("_id")){
+                        preparedData[key] = value.trim() !== "" ? Number(value) : null;
+                    }
+                    if(key == "price" || key == "distance"){
+                        preparedData[key] = value.trim() !== "" ? Number(value) : 0;
+                    }
+                }
+                
+            });
             switch (activeTab) {
                 case "Makes":
                    
@@ -74,9 +111,26 @@ const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
                     await vehmodelApi.create(normalizedData as any);
                     break;
 
+                case "Equipment":
+                    await equipmentApi.create(normalizedData as any);
+                    break;
+
+                case "Set_Of_Equipment":
+                    await setofequipmentApi.create(normalizedData as any);
+                    break;
+
+                case "Versions":
+                    await versionApi.create(normalizedData as any);
+                    break;
+
                 case "Vehicles":
                     await vehicleApi.create(normalizedData as any);
                     break;
+
+               
+                case "Workers":
+                    await workerApi.create(normalizedData as any);
+                    break;  
 
                 case "Caretakers":
                     await caretakerApi.create(normalizedData as any);
@@ -89,9 +143,10 @@ const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
                 case "Actions":
                     await actionApi.create(normalizedData as any);
                     break;
+                case "IsPerformed":
+                    await isPerformedApi.create(normalizedData as any);
+                    break;
 
-                default:
-                    throw new Error(`Obsługa zapisu dla "${activeTab}" nie została zaimplementowana.`);
             }
 
            
@@ -106,16 +161,22 @@ const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
     };
 
 
-    const tabs: EntityType[] = ["Makes", "Vehicles", "Caretakers", "Reservations", "Actions", "Models"];
+    const tabs: EntityType[] = ["Makes","Models","Equipment", "Set_Of_Equipment", "Versions","Vehicles","Workers", "Caretakers", "Reservations", "Actions", "IsPerformed" ];
 
    
     const getSingularLabel = (entity: EntityType) => {
         if (entity === "Makes") return "Markę";
+        if (entity === "Models") return "Model";
+        if(entity === "Equipment") return "Wyposażenie";
+        if(entity === "Set_Of_Equipment") return "Zestaw Wyposażenia";
+        if(entity === "Versions") return "Wersję";
         if (entity === "Vehicles") return "Pojazd";
-        if (entity === "Caretakers") return "Pracownika";
+        if (entity === "Workers") return "Pracownika";
+        if (entity === "Caretakers") return "Opiekuna pojazdu";
         if (entity === "Reservations") return "Rezerwację";
         if (entity === "Actions") return "Akcję";
-        if (entity === "Models") return "Model";
+        if (entity === "IsPerformed") return "Stan akcji";
+       
         return entity;
     };
 
@@ -231,11 +292,17 @@ const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
                 onSuccess={handleAddSubmit}
                 initialState={
                     activeTab === "Makes" ? { name: "" } :
-                    activeTab === "Caretakers" ? { worker_id: "", vehicle_id: "", data_start: "" } :
-                    activeTab === "Vehicles" ? { registration_number: "", model_id: "", price: "" } :
                     activeTab === "Models" ? { name: "", make_id: "" } :
-                    activeTab === "Reservations" ? { start_date: "", end_date: "", vehicle_id: "", caretaker_id: "", purpose: "business" } :
-                    activeTab === "Actions" ? { name: "", date: "", vehicle_id: "" } :
+                    activeTab === "Equipment" ? { name: ""} :
+                    activeTab === "Set_Of_Equipment" ? { name: "", version_id: ""} :
+                    activeTab === "Versions" ? { destination: ""} :
+                    activeTab === "Vehicles" ? { veh_model_id: "", version_id: "", description: "" } :
+                    activeTab === "Workers" ? { name: "", email: "", password: "" } :
+                    activeTab === "Caretakers" ? { worker_id: "", vehicle_id: "", date_start: "" } :
+                    
+                    activeTab === "Reservations" ? { date_start_planned: "", date_end_planned: "", price: "", purpose: "business",  vehicle_id: "", worker_id: ""  } :
+                    activeTab === "Actions" ? { name: "", type: "service" } :
+                    activeTab === "IsPerformed" ? { action_id: "", reservation_id: "", price: "", date: "", state: "awaiting"} :
                     { name: "" }
                 }
             />

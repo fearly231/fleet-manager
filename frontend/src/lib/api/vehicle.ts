@@ -13,7 +13,7 @@ async function getApiErrorMessage(response: Response, fallback: string) {
 		if (response.status === 422 && errorData.detail) {
 			const validationDetail = errorData.detail[0];
 			return `Validation Error: ${validationDetail.msg}`;
-		}
+		} 
 
 		if (typeof errorData.detail === "string") {
 			return errorData.detail;
