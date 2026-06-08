@@ -491,7 +491,7 @@ export default function VehiclesPage() {
                 <div className="flex items-center gap-2">
                   {ev.caretaker ? (
                     <span className="badge px-3 py-1 text-[9px] font-black uppercase tracking-widest" style={{ background: "rgba(52, 211, 153, 0.1)", color: "#34d399", border: "1px solid rgba(52, 211, 153, 0.2)" }}>
-                      Dostępny
+                      Opiekun: {ev.caretaker.worker?.name || "Brak"}
                     </span>
                   ) : (
                     <span className="badge px-3 py-1 text-[9px] font-black uppercase tracking-widest" style={{ background: "rgba(251, 191, 36, 0.1)", color: "#fbbf24", border: "1px solid rgba(251, 191, 36, 0.2)" }}>
