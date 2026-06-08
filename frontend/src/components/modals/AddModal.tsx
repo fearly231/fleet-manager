@@ -44,7 +44,8 @@ export default function AddModal({
   const optionalFieldsForEntity = OPTIONAL_FIELDS[entityType as EntityType] || new Set();
 
   const getInputType = (field: string) => {
-    if (field.includes("date")) return "datetime-local";
+    if (field=== "date_start" || field === "date_end" || field === "date") return "date";
+    if(field.includes("date")) return "datetime-local";
     if (field === "price" || field.endsWith("_id") || field === "distance") return "number";
     return "text";
   };

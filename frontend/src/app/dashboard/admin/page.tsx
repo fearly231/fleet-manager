@@ -94,8 +94,11 @@ const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
                     if(key.endsWith("_id")){
                         preparedData[key] = value.trim() !== "" ? Number(value) : null;
                     }
-                    if(key == "price" || key == "distance"){
+                    if(key === "price" || key === "distance"){
                         preparedData[key] = value.trim() !== "" ? Number(value) : 0;
+                    }
+                    if(key === "date_start" || key === "date"){
+                        preparedData[key] = value.trim() !== "" ? value.substring(0,10): null;
                     }
                 }
                 
@@ -194,7 +197,7 @@ const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
                 </h2>
             </div>
 
-            {/* Nawigacja zakładkowa dostosowana do ciemnego stylu glassmorphism */}
+            
             <div className="flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: "var(--color-border)" }}>
                 {tabs.map((tab) => {
                     const isActive = activeTab === tab;
