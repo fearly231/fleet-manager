@@ -14,9 +14,21 @@ import { workerApi } from "@/lib/api/worker";
 
 
 import AddModal from "@/components/modals/AddModal";
+import EditModal from "@/components/modals/EditModal";
+import DeleteModal from "@/components/modals/DeleteModal";
+import AddEquipmentToSetModal from "@/components/modals/AddEquipmentToSetModal";
+import RemoveEquipmentFromSetModal from "@/components/modals/RemoveEquipmentFromSetModal";
+import DataTable from "@/components/DataTable";
 import { isPerformedApi } from "@/lib/api/is_performed";
 
 type EntityType = "Makes" |  "Models"| "Equipment" | "Set_Of_Equipment" | "Versions" | "Vehicles"  | "Workers" | "Caretakers" | "Reservations" | "Actions" | "IsPerformed" ;
+
+function extractItems(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data)) return data as Record<string, unknown>[];
+  if (data && typeof data === "object" && "items" in data) return (data as Record<string, unknown>).items as Record<string, unknown>[];
+  if (data && typeof data === "object" && "data" in data) return (data as Record<string, unknown>).data as Record<string, unknown>[];
+  return [];
+}
 
 export default function Dashboard() {
     const [activeTab, setActiveTab] = useState<EntityType>("Makes");
@@ -25,6 +37,14 @@ export default function Dashboard() {
     const [error, setError] = useState<string | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [itemToEdit, setItemToEdit] = useState<Record<string, unknown> | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [itemToDelete, setItemToDelete] = useState<{ id: number; name?: string } | null>(null);
+    const [isAddEquipmentModalOpen, setIsAddEquipmentModalOpen] = useState(false);
+    const [selectedSetId, setSelectedSetId] = useState<number | null>(null);
+    const [isRemoveEquipmentModalOpen, setIsRemoveEquipmentModalOpen] = useState(false);
+    const [equipmentInSelectedSet, setEquipmentInSelectedSet] = useState<Record<string, unknown>[]>([]);
 
     const loadData = async (entity: EntityType) => {
         setLoading(true);
@@ -183,6 +203,145 @@ const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
         return entity;
     };
 
+    const handleEditClick = (item: unknown) => {
+        setItemToEdit(item as Record<string, unknown>);
+        setIsEditModalOpen(true);
+    };
+
+    const handleDeleteClick = (id: number) => {
+        const items = extractItems(data);
+        const item = items.find((i: unknown) => (i as Record<string, unknown>).id === id) as Record<string, unknown> | undefined;
+        setItemToDelete({ id, name: item?.name as string | undefined });
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleDeleteSubmit = async (id: number) => {
+        setSaving(true);
+        try {
+            switch (activeTab) {
+                case "Makes":
+                    await makeApi.delete(id);
+                    break;
+                case "Models":
+                    await vehmodelApi.delete(id);
+                    break;
+                case "Equipment":
+                    await equipmentApi.delete(id);
+                    break;
+                case "Set_Of_Equipment":
+                    await setofequipmentApi.delete(id);
+                    break;
+                case "Versions":
+                    await versionApi.delete(id);
+                    break;
+                case "Vehicles":
+                    await vehicleApi.delete(id);
+                    break;
+                case "Workers":
+                    await workerApi.delete(id);
+                    break;
+                case "Caretakers":
+                    await caretakerApi.delete(id);
+                    break;
+                case "Reservations":
+                    await reservationApi.delete(id);
+                    break;
+                case "Actions":
+                    await actionApi.delete(id);
+                    break;
+                case "IsPerformed":
+                    await isPerformedApi.delete(id);
+                    break;
+            }
+            await loadData(activeTab);
+        } catch (err: any) {
+            setError(err.message || "Nie udało się usunąć rekordu.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleAddEquipmentToSet = async (equipmentId: number) => {
+        if (!selectedSetId) return;
+        setSaving(true);
+        try {
+            await setofequipmentApi.addEquipmentToSet(selectedSetId, equipmentId);
+            setIsAddEquipmentModalOpen(false);
+            setSelectedSetId(null);
+            await loadData(activeTab);
+        } catch (err: any) {
+            setError(err.message || "Nie udało się dodać wyposażenia.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleRemoveEquipmentFromSet = async (equipmentId: number) => {
+        if (!selectedSetId) return;
+        setSaving(true);
+        try {
+            await setofequipmentApi.removeEquipmentFromSet(selectedSetId, equipmentId);
+            setIsRemoveEquipmentModalOpen(false);
+            setSelectedSetId(null);
+            setEquipmentInSelectedSet([]);
+            await loadData(activeTab);
+        } catch (err: any) {
+            setError(err.message || "Nie udało się usunąć wyposażenia.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleEditSubmit = async (updatedData: Record<string, unknown>) => {
+        if (!itemToEdit || typeof itemToEdit !== "object" || !("id" in itemToEdit)) return;
+        setSaving(true);
+        try {
+            const id = (itemToEdit as Record<string, number>).id;
+            switch (activeTab) {
+                case "Makes":
+                    await makeApi.update(id, updatedData);
+                    break;
+                case "Models":
+                    await vehmodelApi.update(id, updatedData);
+                    break;
+                case "Equipment":
+                    await equipmentApi.update(id, updatedData);
+                    break;
+                case "Set_Of_Equipment":
+                    await setofequipmentApi.update(id, updatedData);
+                    break;
+                case "Versions":
+                    await versionApi.update(id, updatedData);
+                    break;
+                case "Vehicles":
+                    await vehicleApi.update(id, updatedData);
+                    break;
+                case "Workers":
+                    await workerApi.update(id, updatedData);
+                    break;
+                case "Caretakers":
+                    await caretakerApi.update(id, updatedData);
+                    break;
+                case "Reservations":
+                    await reservationApi.update(id, updatedData);
+                    break;
+                case "Actions":
+                    await actionApi.update(id, updatedData);
+                    break;
+                case "IsPerformed":
+                    await isPerformedApi.update(id, updatedData);
+                    break;
+            }
+            setIsEditModalOpen(false);
+            setItemToEdit(null);
+            await loadData(activeTab);
+        } catch (err: any) {
+            setError(err.message || "Nie udało się zaktualizować rekordu.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <div className="space-y-8 relative z-10 py-2">
             {/* Nagłówek Panelu */}
@@ -205,14 +364,15 @@ const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`px-5 py-2.5 rounded-xl text-sm font-bold tracking-tight transition-all duration-300 ${
+                            // DODANE: cursor-pointer na samym początku klas (kolejność nie ma znaczenia, ale ułatwia czytanie)
+                            className={`cursor-pointer px-5 py-2.5 rounded-xl text-sm font-bold tracking-tight transition-all duration-300 hover:-translate-y-px ${
                                 isActive
                                     ? "text-white shadow-lg"
-                                    : "hover:text-white"
+                                    : "hover:text-white hover:bg-white/10" 
                             }`}
                             style={{
                                 color: isActive ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-                                background: isActive ? "var(--color-overlay)" : "transparent",
+                                background: isActive ? "var(--color-overlay)" : undefined,
                                 boxShadow: isActive ? "0 0 15px rgba(139, 92, 246, 0.15)" : "none",
                             }}
                         >
@@ -233,7 +393,7 @@ const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
 
                     <button
                         onClick={() => setIsAddModalOpen(true)}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-[0_4px_15px_rgba(139,92,246,0.2)] transition-all duration-300 hover:-translate-y-0.5"
+                        className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-[0_4px_15px_rgba(139,92,246,0.2)] transition-all duration-300 hover:-translate-y-0.5"
                     >
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -260,34 +420,37 @@ const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
                     </div>
                 )}
 
-                {/* Prezentacja danych JSON */}
-                {!loading && !error && data && (
-                    <div className="space-y-4 animate-fadeIn">
-                        {data.total !== undefined && (
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                Łączna liczba rekordów: <span className="text-white">{data.total}</span>
-                            </p>
-                        )}
+                {!loading && !error && extractItems(data).length > 0 && (
+                    <DataTable
+                        items={extractItems(data)}
+                        onEdit={handleEditClick}
+                        onDelete={handleDeleteClick}
+                        onAddEquipmentToSet={activeTab === "Set_Of_Equipment" ? (setId) => {
+                            setSelectedSetId(setId);
+                            setIsAddEquipmentModalOpen(true);
+                        } : undefined}
+                        onRemoveEquipmentFromSet={activeTab === "Set_Of_Equipment" ? (setId) => {
+                            const items = extractItems(data);
+                            const selectedSet = items.find((i) => i.id === setId) as Record<string, unknown> | undefined;
+                            if (selectedSet && Array.isArray(selectedSet.equipments)) {
+                                setEquipmentInSelectedSet(selectedSet.equipments as Record<string, unknown>[]);
+                            }
+                            setSelectedSetId(setId);
+                            setIsRemoveEquipmentModalOpen(true);
+                        } : undefined}
+                    />
+                )}
 
-                        <div className="relative group">
-                            {/* Delikatna poświata pod kodem */}
-                            <div className="absolute inset-0 bg-purple-500/5 rounded-2xl blur-xl pointer-events-none" />
-                            
-                            <pre 
-                                className="relative z-10 border p-5 rounded-2xl overflow-x-auto text-xs sm:text-sm font-mono text-purple-200/90 leading-relaxed shadow-inner"
-                                style={{ 
-                                    background: "rgba(0, 0, 0, 0.2)", 
-                                    borderColor: "var(--color-border)" 
-                                }}
-                            >
-                                {JSON.stringify(data, null, 2)}
-                            </pre>
-                        </div>
+                {/* Brak danych */}
+                {!loading && !error && extractItems(data).length === 0 && (
+                    <div className="text-center py-12">
+                        <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                            Brak rekordów do wyświetlenia
+                        </p>
                     </div>
                 )}
             </div>
 
-            {/* Modal dodawania nowych elementów */}
             <AddModal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
@@ -309,6 +472,62 @@ const handleAddSubmit = async (normalizedData: Record<string, unknown>) => {
                     { name: "" }
                 }
             />
+
+            <EditModal
+                isOpen={isEditModalOpen}
+                onClose={() => {
+                    setIsEditModalOpen(false);
+                    setItemToEdit(null);
+                }}
+                entityType={activeTab}
+                onSuccess={handleEditSubmit}
+                initialData={itemToEdit}
+            />
+
+            <DeleteModal
+                isOpen={isDeleteModalOpen}
+                onClose={() => {
+                    setIsDeleteModalOpen(false);
+                    setItemToDelete(null);
+                }}
+                onConfirm={() => {
+                    if (itemToDelete) {
+                        handleDeleteSubmit(itemToDelete.id);
+                        setIsDeleteModalOpen(false);
+                        setItemToDelete(null);
+                    }
+                }}
+                itemName={itemToDelete?.name}
+                isDeleting={saving}
+            />
+
+            {activeTab === "Set_Of_Equipment" && (
+                <AddEquipmentToSetModal
+                    isOpen={isAddEquipmentModalOpen}
+                    onClose={() => {
+                        setIsAddEquipmentModalOpen(false);
+                        setSelectedSetId(null);
+                    }}
+                    onSuccess={handleAddEquipmentToSet}
+                    setOfEquipmentId={selectedSetId ?? 0}
+                    isLoading={saving}
+                />
+            )}
+
+            {activeTab === "Set_Of_Equipment" && (
+                <RemoveEquipmentFromSetModal
+                    isOpen={isRemoveEquipmentModalOpen}
+                    onClose={() => {
+                        setIsRemoveEquipmentModalOpen(false);
+                        setSelectedSetId(null);
+                        setEquipmentInSelectedSet([]);
+                    }}
+                    onSuccess={handleRemoveEquipmentFromSet}
+                    setOfEquipmentId={selectedSetId ?? 0}
+                    equipmentInSet={equipmentInSelectedSet as any}
+                    isLoading={saving}
+                />
+            )}
         </div>
     );
 }
