@@ -251,7 +251,9 @@ export default function ReservationsPage() {
       setSelectedEnd(null);
       setSelectingTimeFor("start");
     } else {
-      if (d < selectedStart) {
+      const dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const startDate = new Date(selectedStart.getFullYear(), selectedStart.getMonth(), selectedStart.getDate());
+      if (dDate < startDate) {
         setSelectedStart(d);
         setSelectingTimeFor("start");
       } else {
@@ -799,47 +801,33 @@ export default function ReservationsPage() {
                       ))}
                       {renderCalendar()}
                     </div>
-                  </div>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                      {Array.from({ length: 24 }).map((_, i) => {
+                        const hourDate = new Date(selectingTimeFor === "start" ? selectedStart! : selectedEnd!);
+                        hourDate.setHours(i, 0, 0, 0);
+                        
+                        const isPast = hourDate < new Date();
+                        const isOccupied = existingReservations.some(r => {
+                           const s = new Date(r.date_start_planned);
+                           const e = new Date(r.date_end_planned);
+                           return hourDate >= s && hourDate < e;
+                        });
+                        const isInvalidEnd = selectingTimeFor === "end" && !!selectedStart && hourDate <= selectedStart;
+                        const isDisabled = isPast || isOccupied || isInvalidEnd;
+                        const isSelected = selectingTimeFor === "start" 
+                           ? (selectedStart && selectedStart.getHours() === i)
+                           : (selectedEnd && selectedEnd.getHours() === i);
 
-                  {/* Hourly Picker */}
-                  {selectingTimeFor && (
-                    <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-purple-400">
-                          Wybierz godzinę {selectingTimeFor === "start" ? "rozpoczęcia" : "zakończenia"}
-                        </label>
-                        <button
-                          onClick={() => setSelectingTimeFor(null)}
-                          className="text-[10px] font-bold text-white/40 hover:text-white transition-colors"
-                        >
-                          Anuluj
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                        {Array.from({ length: 24 }).map((_, i) => {
-                          const hourDate = new Date(selectingTimeFor === "start" ? selectedStart! : selectedEnd!);
-                          hourDate.setHours(i, 0, 0, 0);
-
-                          const isPast = hourDate < new Date();
-                          const isOccupied = existingReservations.some(r => {
-                            const s = new Date(r.date_start_planned);
-                            const e = new Date(r.date_end_planned);
-                            return hourDate >= s && hourDate < e;
-                          });
-                          const isSelected = selectingTimeFor === "start"
-                            ? (selectedStart && selectedStart.getHours() === i)
-                            : (selectedEnd && selectedEnd.getHours() === i);
-
-                          return (
-                            <button
-                              key={i}
-                              type="button"
-                              disabled={isPast || isOccupied}
-                              onClick={() => handleTimeClick(i)}
-                              className={`py-2.5 rounded-xl text-[10px] font-black transition-all border
-                              ${isPast || isOccupied
-                                  ? "bg-white/5 border-transparent text-white/10 cursor-not-allowed"
-                                  : "bg-white/5 border-white/5 text-white/60 hover:border-purple-500/50 hover:text-white"}
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => handleTimeClick(i)}
+                            className={`py-2.5 rounded-xl text-[10px] font-black transition-all border
+                              ${isDisabled 
+                                ? "bg-white/5 border-transparent text-white/10 cursor-not-allowed" 
+                                : "bg-white/5 border-white/5 text-white/60 hover:border-purple-500/50 hover:text-white"}
                               ${isSelected ? "!bg-purple-500 !border-purple-500 !text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]" : ""}
                             `}
                             >

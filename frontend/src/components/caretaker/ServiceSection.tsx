@@ -229,7 +229,9 @@ export default function ServiceSection({ vehicleId, toast, onRefresh }: ServiceS
       setSelectingTimeFor("start");
       setFieldErrors({});
     } else {
-      if (d < selectedStart) {
+      const dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const startDate = new Date(selectedStart.getFullYear(), selectedStart.getMonth(), selectedStart.getDate());
+      if (dDate < startDate) {
         setSelectedStart(d);
         setSelectingTimeFor("start");
       } else {
@@ -731,29 +733,46 @@ export default function ServiceSection({ vehicleId, toast, onRefresh }: ServiceS
                         </div>
                       </div>
                     </div>
-                  )}
-                </>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                      {Array.from({ length: 24 }).map((_, i) => {
+                        const hourDate = new Date(
+                          selectingTimeFor === "start" ? selectedStart! : selectedEnd!,
+                        );
+                        hourDate.setHours(i, 0, 0, 0);
 
-                {/* Calendar section (identical to vehicles page) */}
-                <div className="space-y-6 pt-4">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-white/30">
-                      Kalendarz Serwisu
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={prevMonth} disabled={isCanceled} className={`p-2 rounded-lg transition-colors text-white/40 ${isCanceled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/5 hover:text-white'}`}>
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      <span className="text-xs font-black uppercase tracking-widest text-white/80 w-32 text-center">
-                        {MONTHS_PL[calendarMonth.month]} {calendarMonth.year}
-                      </span>
-                      <button type="button" onClick={nextMonth} disabled={isCanceled} className={`p-2 rounded-lg transition-colors text-white/40 ${isCanceled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/5 hover:text-white'}`}>
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
+                        const isPast = hourDate < new Date();
+                        const isOccupied = existingReservations.some((r) => {
+                          if (editingService && r.id === editingService.id) return false;
+                          const s = new Date(r.date_start_planned);
+                          const e = new Date(r.date_end_planned);
+                          return hourDate >= s && hourDate < e;
+                        });
+                        const isInvalidEnd = selectingTimeFor === "end" && !!selectedStart && hourDate <= selectedStart;
+                        const isDisabled = isPast || isOccupied || isInvalidEnd;
+                        const isSelected =
+                          selectingTimeFor === "start"
+                            ? selectedStart && selectedStart.getHours() === i
+                            : selectedEnd && selectedEnd.getHours() === i;
+
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => handleTimeClick(i)}
+                            className={`py-2.5 rounded-xl text-[10px] font-black transition-all border
+                              ${isDisabled
+                                ? "bg-white/5 border-transparent text-white/10 cursor-not-allowed"
+                                : "bg-white/5 border-white/5 text-white/60 hover:border-purple-500/50 hover:text-white"}
+                              ${isSelected
+                                ? "!bg-purple-500 !border-purple-500 !text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]"
+                                : ""}
+                            `}
+                          >
+                            {String(i).padStart(2, "0")}:00
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
