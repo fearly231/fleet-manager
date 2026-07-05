@@ -1,0 +1,933 @@
+"use client";
+
+import { useEffect, useState, useCallback, useMemo } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { api } from "@/lib/api";
+import { reservationApi } from "@/lib/api/reservation";
+import { vehicleApi } from "@/lib/api/vehicle";
+import { vehmodelApi } from "@/lib/api/vehmodel";
+import { makeApi } from "@/lib/api/make";
+import { workerApi } from "@/lib/api/worker";
+import { useToast } from "@/components/ui/Toast";
+import ExploitationRequestModal from "@/components/modals/ExploitationRequestModal";
+import {
+  daysInMonth,
+  firstDayOfMonth,
+  sameDay,
+  dateFromYMD,
+  doesRangeOverlap,
+  MONTHS_PL,
+  DAYS_PL,
+} from "@/lib/calendar";
+import type { ReservationPublic } from "@/types/reservation_types";
+import type { VehiclePublic } from "@/types/vehicle_types";
+import type { VehModelPublic } from "@/types/vehmodel_types";
+import type { MakePublic } from "@/types/make_types";
+
+interface EnrichedReservation {
+  reservation: ReservationPublic;
+  vehicle: VehiclePublic | null;
+  makeName: string;
+  modelName: string;
+}
+
+const STATE_LABELS: Record<string, string> = {
+  created: "Utworzona",
+  accepted: "Zaakceptowana",
+  in_progress: "W trakcie",
+  completed: "Zakończona",
+  canceled: "Anulowana",
+};
+
+const STATE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
+  created: { bg: "rgba(139, 92, 246, 0.2)", text: "#c4b5fd", dot: "#8b5cf6" },
+  accepted: { bg: "rgba(52, 211, 153, 0.2)", text: "#34d399", dot: "#10b981" },
+  in_progress: { bg: "rgba(96,165,250,0.2)", text: "#93c5fd", dot: "#3b82f6" },
+  completed: { bg: "rgba(168,162,158,0.2)", text: "#d6d3d1", dot: "#78716c" },
+  canceled: { bg: "rgba(248,113,113,0.2)", text: "#f87171", dot: "#ef4444" },
+};
+
+const CAR_IMAGES = [
+  "/assets/cars/car-sedan.png",
+  "/assets/cars/car-suv.png",
+  "/assets/cars/car-compact.png",
+  "/assets/cars/car-van.jpg",
+];
+
+function getCarImage(index: number) {
+  return CAR_IMAGES[index % CAR_IMAGES.length];
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  date_start_planned: "Data rozpoczęcia (planowana)",
+  date_end_planned: "Data zakończenia (planowana)",
+  date_start: "Data rozpoczęcia",
+  date_end: "Data zakończenia",
+  price: "Cena (PLN)",
+  purpose: "Cel rezerwacji",
+  vehicle_id: "Pojazd",
+  worker_id: "Pracownik",
+  distance: "Dystans (km)",
+  state: "Status",
+  state_start: "Data zmiany statusu (początek)",
+  state_end: "Data zmiany statusu (koniec)",
+  id: "ID",
+};
+
+const FIELD_ORDER = [
+  "id",
+  "date_start_planned",
+  "date_end_planned",
+  "date_start",
+  "date_end",
+  "price",
+  "purpose",
+  "vehicle_id",
+  "worker_id",
+  "distance",
+  "state",
+  "state_start",
+  "state_end",
+];
+
+const PURPOSE_OPTIONS = [
+  { value: "business", label: "Służbowy" },
+  { value: "private", label: "Prywatny" },
+];
+
+const HIDDEN_FIELDS = new Set(["id", "state", "state_start", "state_end", "date_start", "date_end", "vehicle_id", "worker_id", "distance"]);
+const EDITABLE_FIELDS = new Set(["date_start_planned", "date_end_planned", "price", "purpose", "vehicle_id", "worker_id"]);
+
+export default function ReservationsPage() {
+  const [reservations, setReservations] = useState<EnrichedReservation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [panelReservation, setPanelReservation] = useState<EnrichedReservation | null>(null);
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const [existingReservations, setExistingReservations] = useState<ReservationPublic[]>([]);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+  const [selectedStart, setSelectedStart] = useState<Date | null>(null);
+  const [selectedEnd, setSelectedEnd] = useState<Date | null>(null);
+  const [selectingTimeFor, setSelectingTimeFor] = useState<"start" | "end" | null>(null);
+  const [exploitationModal, setExploitationModal] = useState<{ id: number; name: string } | null>(null);
+
+  const { toast } = useToast();
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const currentUser = await api.getCurrentUser();
+      if (!currentUser) throw new Error("Nie znaleziono użytkownika.");
+
+      const [resResp, vehResp, modelResp, makeResp] = await Promise.all([
+        reservationApi.getAll(0, 100, currentUser.id),
+        vehicleApi.getAll(),
+        vehmodelApi.getAll(),
+        makeApi.getAll(),
+        workerApi.getAll(),
+      ]);
+
+      const resData: ReservationPublic[] = resResp.data || [];
+      const vehData: VehiclePublic[] = vehResp.items || [];
+      const models: VehModelPublic[] = (modelResp as unknown as { data: VehModelPublic[]; count: number }).data || [];
+      const makes: MakePublic[] = (makeResp as unknown as { data: MakePublic[]; count: number }).data || [];
+
+      const enriched: EnrichedReservation[] = resData
+        .map((r) => {
+          const vehicle = vehData.find((v) => v.id === r.vehicle_id) || null;
+          const model = vehicle ? models.find((m) => m.id === vehicle.veh_model_id) : null;
+          const make = model ? makes.find((mk) => mk.id === model.make_id) : null;
+
+          return {
+            reservation: r,
+            vehicle,
+            makeName: make?.name || "Nieznana marka",
+            modelName: model?.name || "Nieznany model",
+          };
+        })
+        .sort(
+          (a, b) =>
+            new Date(a.reservation.date_start_planned).getTime() -
+            new Date(b.reservation.date_end_planned).getTime(),
+        );
+
+      setReservations(enriched);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Nie udało się pobrać rezerwacji.");
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const openPanel = async (er: EnrichedReservation) => {
+    setPanelReservation(er);
+    const data: Record<string, unknown> = {};
+    FIELD_ORDER.forEach((key) => {
+      data[key] = er.reservation[key as keyof ReservationPublic];
+    });
+    setFormData(data);
+    setShowDeleteConfirm(false);
+    setSelectingTimeFor(null);
+
+    const s = new Date(er.reservation.date_start_planned);
+    const e = new Date(er.reservation.date_end_planned);
+    setSelectedStart(s);
+    setSelectedEnd(e);
+    setCalendarMonth({ year: s.getFullYear(), month: s.getMonth() });
+
+    try {
+      const resResp = await reservationApi.getAll();
+      const all = resResp.data || [];
+      setExistingReservations(
+        all.filter((r) => r.vehicle_id === er.reservation.vehicle_id && r.id !== er.reservation.id && r.state !== "canceled")
+      );
+    } catch {
+      setExistingReservations([]);
+    }
+  };
+
+  const closePanel = () => {
+    setPanelReservation(null);
+    setFormData({});
+    setShowDeleteConfirm(false);
+    setSelectedStart(null);
+    setSelectedEnd(null);
+    setSelectingTimeFor(null);
+  };
+
+  const blockedDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of existingReservations) {
+      const start = new Date(r.date_start_planned);
+      const end = new Date(r.date_end_planned);
+      const cur = new Date(start);
+      while (cur <= end) {
+        set.add(`${cur.getFullYear()}-${cur.getMonth()}-${cur.getDate()}`);
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+    return set;
+  }, [existingReservations]);
+
+  const handleCalendarDayClick = (day: number) => {
+    const d = dateFromYMD(calendarMonth.year, calendarMonth.month, day);
+    if (d < new Date(new Date().setHours(0, 0, 0, 0))) return;
+
+    // Find first available hour
+    let firstAvailableHour = 0;
+    const now = new Date();
+    for (let h = 0; h < 24; h++) {
+      const checkDate = new Date(d);
+      checkDate.setHours(h, 0, 0, 0);
+      const isPast = checkDate < now;
+      const isOccupied = existingReservations.some(r => {
+        const s = new Date(r.date_start_planned);
+        const e = new Date(r.date_end_planned);
+        return checkDate >= s && checkDate < e;
+      });
+      if (!isPast && !isOccupied) {
+        firstAvailableHour = h;
+        break;
+      }
+    }
+    d.setHours(firstAvailableHour, 0, 0, 0);
+
+    if (!selectedStart || (selectedStart && selectedEnd)) {
+      setSelectedStart(d);
+      setSelectedEnd(null);
+      setSelectingTimeFor("start");
+    } else {
+      const dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const startDate = new Date(selectedStart.getFullYear(), selectedStart.getMonth(), selectedStart.getDate());
+      if (dDate < startDate) {
+        setSelectedStart(d);
+        setSelectingTimeFor("start");
+      } else {
+        setSelectedEnd(d);
+        setSelectingTimeFor("end");
+      }
+    }
+  };
+
+  const handleTimeClick = (hour: number) => {
+    if (!selectingTimeFor) return;
+
+    if (selectingTimeFor === "start" && selectedStart) {
+      const newStart = new Date(selectedStart);
+      newStart.setHours(hour, 0, 0, 0);
+      setSelectedStart(newStart);
+      setSelectingTimeFor(null);
+    } else if (selectingTimeFor === "end" && selectedEnd) {
+      const newEnd = new Date(selectedEnd);
+      newEnd.setHours(hour, 0, 0, 0);
+
+      if (selectedStart && newEnd <= selectedStart) {
+        toast("error", "Data zakończenia musi być późniejsza niż rozpoczęcia.");
+        return;
+      }
+
+      if (selectedStart && doesRangeOverlap(selectedStart, newEnd, existingReservations)) {
+        toast("error", "Wybrany termin pokrywa się z istniejącą rezerwacją.");
+        return;
+      }
+
+      setSelectedEnd(newEnd);
+      setSelectingTimeFor(null);
+    }
+  };
+
+  const prevMonth = () => {
+    setCalendarMonth((p) => p.month === 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: p.month - 1 });
+  };
+  const nextMonth = () => {
+    setCalendarMonth((p) => p.month === 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: p.month + 1 });
+  };
+
+  const renderCalendar = () => {
+    const { year, month } = calendarMonth;
+    const totalDays = daysInMonth(year, month);
+    const fdom = firstDayOfMonth(year, month);
+    const startOffset = fdom === 0 ? 6 : fdom - 1;
+
+    const cells: React.ReactNode[] = [];
+    for (let i = 0; i < startOffset; i++) {
+      cells.push(<div key={`empty-${i}`} />);
+    }
+    for (let d = 1; d <= totalDays; d++) {
+      const date = dateFromYMD(year, month, d);
+      const key = `${year}-${month}-${d}`;
+      const hasReservation = blockedDates.has(key);
+      const past = date < new Date(new Date().setHours(0, 0, 0, 0));
+      const isStart = selectedStart && sameDay(date, selectedStart);
+      const isEnd = selectedEnd && sameDay(date, selectedEnd);
+      const selected = isStart || isEnd;
+      const inRange = selectedStart && selectedEnd && date > selectedStart && date < selectedEnd;
+
+      cells.push(
+        <button
+          key={d}
+          type="button"
+          disabled={past}
+          onClick={() => handleCalendarDayClick(d)}
+          className={`h-9 w-9 mx-auto rounded-full text-xs font-bold transition-all flex flex-col items-center justify-center relative
+            ${past ? "opacity-30 cursor-not-allowed" : "hover:bg-white/10 cursor-pointer text-white/70"}
+            ${selected ? "!text-white !bg-purple-500 shadow-[0_0_15px_rgba(139,92,246,0.5)]" : ""}
+            ${inRange ? "bg-purple-500/20 text-purple-300" : ""}
+          `}
+        >
+          {d}
+          {hasReservation && !selected && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-purple-400/50" />}
+        </button>
+      );
+    }
+    return cells;
+  };
+
+  const handleFieldChange = (key: string, value: unknown) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleStartReservation = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    try {
+      await reservationApi.update(id, { state: "in_progress", date_start: new Date().toISOString() });
+      toast("success", "Trasa została rozpoczęta.");
+      fetchData();
+    } catch (err: unknown) {
+      toast("error", err instanceof Error ? err.message : "Błąd rozpoczynania trasy.");
+    }
+  };
+
+  const handleEndReservation = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    try {
+      await reservationApi.update(id, { state: "completed", date_end: new Date().toISOString() });
+      toast("success", "Trasa została zakończona.");
+      fetchData();
+    } catch (err: unknown) {
+      toast("error", err instanceof Error ? err.message : "Błąd kończenia trasy.");
+    }
+  };
+
+  const handleCancelReservation = async () => {
+    if (!panelReservation) return;
+    try {
+      await reservationApi.update(panelReservation.reservation.id, { state: "canceled" });
+      toast("success", "Rezerwacja została pomyślnie anulowana.");
+      fetchData();
+      closePanel();
+    } catch (err: unknown) {
+      toast("error", err instanceof Error ? err.message : "Błąd anulowania rezerwacji.");
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!panelReservation || !selectedStart || !selectedEnd) {
+      toast("error", "Wybierz okres rezerwacji na kalendarzu.");
+      return;
+    }
+
+    if (doesRangeOverlap(selectedStart, selectedEnd, existingReservations)) {
+      toast("error", "Wybrany termin pokrywa się z istniejącą rezerwacją. Wybierz inny okres.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const toISO = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        const h = String(d.getHours()).padStart(2, "0");
+        return `${y}-${m}-${day}T${h}:00:00`;
+      };
+
+      const diffMs = selectedEnd.getTime() - selectedStart.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      const finalPrice = formData.purpose === "business" ? 0 : Math.ceil(diffHours / 24) * 150;
+
+      const updateData: Record<string, unknown> = {
+        date_start_planned: toISO(selectedStart),
+        date_end_planned: toISO(selectedEnd),
+        purpose: formData.purpose,
+        price: finalPrice
+      };
+
+      await reservationApi.update(panelReservation.reservation.id, updateData);
+      toast("success", "Rezerwacja została zaktualizowana.");
+      closePanel();
+      fetchData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Błąd aktualizacji rezerwacji.";
+      toast("error", msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!panelReservation) return;
+    setIsDeleting(true);
+    try {
+      await reservationApi.delete(panelReservation.reservation.id);
+      toast("success", "Rezerwacja została usunięta.");
+      closePanel();
+      fetchData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Błąd usuwania rezerwacji.";
+      toast("error", msg);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const formatDateFull = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString("pl-PL", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return iso;
+    }
+  };
+
+  useEffect(() => {
+    if (!panelReservation) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePanel();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [panelReservation]);
+
+  return (
+    <div className="space-y-10 relative z-10 py-4">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="space-y-2">
+          <nav className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-purple-400/80">
+            <Link href="/dashboard" className="hover:text-purple-300 transition-colors">System</Link>
+            <span className="w-1 h-1 rounded-full bg-white/20" />
+            <span className="text-white/40">Zarządzanie rezerwacjami</span>
+          </nav>
+          <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tighter">
+            Twoja <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400">Flota</span>
+          </h1>
+          <p className="text-gray-400 text-sm max-w-md font-medium leading-relaxed">
+            Przeglądaj, edytuj i monitoruj status wszystkich aktywnych pojazdów w Twoim harmonogramie.
+          </p>
+        </div>
+        <Link
+          href="/dashboard/vehicles"
+          className="btn-primary px-8 py-3 shadow-[0_0_30px_rgba(139,92,246,0.3)] hover:shadow-[0_0_40px_rgba(139,92,246,0.5)] transition-all"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Zarezerwuj pojazd
+        </Link>
+      </div>
+
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+      {/* Main Content */}
+      <div className="space-y-6">
+        {loading && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="glass-surface rounded-[2rem] overflow-hidden h-[450px]">
+                <div className="skeleton h-48 w-full" />
+                <div className="p-8 space-y-4">
+                  <div className="skeleton h-8 w-1/2" />
+                  <div className="skeleton h-20 w-full rounded-2xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <div className="glass-surface rounded-2xl p-12 text-center max-w-2xl mx-auto mt-6">
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-500">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-white">Błąd synchronizacji</h3>
+                <p className="text-gray-400 text-sm">{error}</p>
+              </div>
+              <button onClick={fetchData} className="btn-ghost mt-2 px-8 border-white/5">Spróbuj ponownie</button>
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && reservations.length === 0 && (
+          <div className="glass-surface rounded-2xl p-12 text-center max-w-xl mx-auto mt-6">
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative">
+                <div className="absolute inset-0 bg-purple-500/10 blur-2xl rounded-full" />
+                <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-white/5 border border-white/10 text-purple-400">
+                  <Image src="/assets/icons/icon-calendar-check.svg" alt="Calendar" width={32} height={32} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-xl font-black text-white">Brak zaplanowanych tras</h3>
+                <p className="text-gray-400 text-sm max-w-xs mx-auto leading-relaxed font-medium">
+                  Twoja flota obecnie odpoczywa. Czas zaplanować kolejną podróż.
+                </p>
+              </div>
+              <Link href="/dashboard/vehicles" className="btn-primary mt-2 px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest">
+                Przeglądaj dostępne auta
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && reservations.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {reservations.map((er) => {
+              const stateStyle = STATE_COLORS[er.reservation.state] || STATE_COLORS.created;
+              const stateLabel = STATE_LABELS[er.reservation.state] || er.reservation.state;
+
+              return (
+                <div
+                  key={er.reservation.id}
+                  onClick={() => {
+                    if (er.reservation.purpose === "service") {
+                      toast("error", "Zarządzanie serwisami odbywa się w zakładce Twoje Pojazdy (Panel Opiekuna).");
+                    } else {
+                      openPanel(er);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      if (er.reservation.purpose === "service") {
+                        toast("error", "Zarządzanie serwisami odbywa się w zakładce Twoje Pojazdy (Panel Opiekuna).");
+                      } else {
+                        openPanel(er);
+                      }
+                    }
+                  }}
+                  className={`group relative glass-elevated rounded-[2rem] overflow-hidden transition-all duration-500 text-left border-white/5 cursor-pointer ${er.reservation.purpose === "service"
+                    ? "opacity-80"
+                    : "hover:-translate-y-2 hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.5)] hover:border-purple-500/30"
+                    }`}
+                >
+                  {/* Top: Tech Placeholder */}
+                  <div className="relative h-40 flex items-center justify-center bg-black/40 overflow-hidden border-b border-white/5">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(139,92,246,0.1)_0%,transparent_70%)]" />
+                    <svg className="w-24 h-24 text-white/10 group-hover:text-purple-500/20 transition-colors duration-500" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" />
+                    </svg>
+
+                    <div className="absolute top-6 right-6">
+                      <div
+                        className="badge gap-2 px-3 py-1 text-[9px] font-black uppercase tracking-[0.1em] backdrop-blur-xl border-white/5"
+                        style={{ background: stateStyle.bg, color: stateStyle.text }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full animate-pulse shadow-[0_0_10px_currentColor]" style={{ background: stateStyle.dot }} />
+                        {stateLabel}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-8 space-y-6">
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1">
+                        <h3 className="text-xl font-black text-white group-hover:text-purple-400 transition-colors tracking-tight">
+                          {er.makeName} {er.modelName}
+                        </h3>
+                        <div className="flex items-center gap-2 opacity-40">
+                          <Image src="/assets/icons/icon-dashboard.svg" alt="ID" width={12} height={12} className="invert" />
+                          <span className="text-[10px] font-mono tracking-widest font-bold uppercase">RES-{er.reservation.id}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-black/30 rounded-2xl p-5 border border-white/5 space-y-4 relative overflow-hidden group/timeline">
+                      <div className="absolute left-[27px] top-8 bottom-8 w-px bg-gradient-to-b from-purple-500/50 via-blue-500/50 to-transparent" />
+                      <div className="flex items-center gap-4 relative">
+                        <div className="w-6 h-6 flex items-center justify-center rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                          <Image src="/assets/icons/icon-calendar-check.svg" alt="Start" width={12} height={12} />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[9px] text-white/30 uppercase font-black tracking-widest">Odbiór</span>
+                          <span className="text-xs font-bold text-gray-200">{formatDateFull(er.reservation.date_start_planned)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 relative">
+                        <div className="w-6 h-6 flex items-center justify-center rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[9px] text-white/30 uppercase font-black tracking-widest">Zwrot</span>
+                          <span className="text-xs font-bold text-gray-200">{formatDateFull(er.reservation.date_end_planned)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Przyciski Akcji (Rozpocznij, Zakończ, Zgłoś) */}
+                    <div className="flex flex-col gap-2">
+                      {er.reservation.state === "accepted" && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleStartReservation(e, er.reservation.id)}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/40 transition-all shadow-[0_0_15px_rgba(16,185,129,0.1)] hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+                        >
+                          Rozpocznij trasę
+                        </button>
+                      )}
+
+                      {er.reservation.state === "in_progress" && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleEndReservation(e, er.reservation.id)}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/40 transition-all shadow-[0_0_15px_rgba(59,130,246,0.1)] hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]"
+                        >
+                          Zakończ trasę
+                        </button>
+                      )}
+
+                      {(er.reservation.state === "in_progress" || er.reservation.state === "completed") && (
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExploitationModal({ id: er.reservation.id, name: `${er.makeName} ${er.modelName}` });
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setExploitationModal({ id: er.reservation.id, name: `${er.makeName} ${er.modelName}` });
+                            }
+                          }}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl bg-amber-500/5 text-amber-400 border border-amber-500/15 hover:bg-amber-500/10 hover:border-amber-500/30 transition-all cursor-pointer"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                          </svg>
+                          Zgłoś eksploatację
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="flex items-center gap-3 px-3 py-1.5 bg-white/5 rounded-xl border border-white/5">
+                        <Image
+                          src={er.reservation.purpose === "business" ? "/assets/icons/icon-business.svg" : "/assets/icons/icon-private.svg"}
+                          alt="Purpose"
+                          width={12}
+                          height={12}
+                          className="opacity-70"
+                        />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-white/50">
+                          {er.reservation.purpose === "business"
+                            ? "Business"
+                            : er.reservation.purpose === "private"
+                              ? "Private"
+                              : "Service"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-purple-400 group-hover:text-white transition-all">
+                        <span>Zarządzaj</span>
+                        <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* --- PANEL BOCZNY --- */}
+      {panelReservation && (() => {
+        const isCanceled = panelReservation.reservation.state === "canceled";
+        const canBeCanceled = !["completed", "canceled", "in_progress"].includes(panelReservation.reservation.state);
+
+        return (
+          <div className="fixed inset-x-0 top-16 bottom-0 z-[100] flex justify-end" role="dialog" aria-modal="true">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity" onClick={closePanel} />
+            <div className="relative z-10 w-full md:w-[35rem] h-full bg-[#0d0f14] shadow-[-20px_0_60px_rgba(0,0,0,0.5)] animate-slide-in flex flex-col border-l border-white/5">
+              {/* Panel Header */}
+              <div className="p-8 border-b border-white/5 flex justify-between items-center bg-black/20">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-purple-400">
+                    <span>Edycja Rezerwacji</span>
+                    <span className="w-1 h-1 rounded-full bg-white/20" />
+                    <span className="text-white/40">#{panelReservation.reservation.id}</span>
+                  </div>
+                  <h2 className="text-2xl font-black text-white">
+                    {panelReservation.makeName} {panelReservation.modelName}
+                  </h2>
+                </div>
+                <button onClick={closePanel} className="p-3 rounded-2xl hover:bg-white/5 transition-colors text-white/40 hover:text-white">
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Panel Content */}
+              <div className="p-8 flex-1 overflow-y-auto custom-scrollbar space-y-10">
+                {/* Car Visual Placeholder in Panel */}
+                <div className="relative h-48 bg-white/5 rounded-3xl flex items-center justify-center border border-white/5 overflow-hidden group/panel-car">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(139,92,246,0.1)_0%,transparent_70%)]" />
+                  <svg className="w-24 h-24 text-white/10 group-hover/panel-car:text-purple-500/20 transition-colors duration-500" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" />
+                  </svg>
+                </div>
+
+                {isCanceled && (
+                  <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-center">
+                    <p className="text-xs font-bold text-red-400">
+                      Ta rezerwacja jest anulowana. Edycja została zablokowana.
+                    </p>
+                  </div>
+                )}
+
+                {/* Editable Fields */}
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Cel rezerwacji</label>
+                    <select
+                      className="input-dark bg-white/5 border-white/10 text-white rounded-2xl py-4 w-full focus:border-purple-500/50"
+                      value={String(formData.purpose || "business")}
+                      onChange={(e) => handleFieldChange("purpose", e.target.value)}
+                      disabled={isCanceled}
+                    >
+                      {PURPOSE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* REZERVATION CALENDAR */}
+                <div className="space-y-6 pt-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/30">Edytuj Okres Rezerwacji</label>
+                    <div className="flex items-center gap-2">
+                      <button onClick={prevMonth} className="p-2 hover:bg-white/5 rounded-lg transition-colors text-white/40 hover:text-white">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M15 19l-7-7 7-7" /></svg>
+                      </button>
+                      <span className="text-xs font-black uppercase tracking-widest text-white/80 w-32 text-center">
+                        {MONTHS_PL[calendarMonth.month]} {calendarMonth.year}
+                      </span>
+                      <button onClick={nextMonth} className="p-2 hover:bg-white/5 rounded-lg transition-colors text-white/40 hover:text-white">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-black/20 rounded-[2rem] p-6 border border-white/5">
+                    <div className="grid grid-cols-7 mb-4">
+                      {DAYS_PL.map(d => <div key={d} className="text-[9px] font-black uppercase text-white/20 text-center">{d}</div>)}
+                    </div>
+                    <div className="grid grid-cols-7 gap-1">
+                      {Array.from({ length: firstDayOfMonth(calendarMonth.year, calendarMonth.month) }).map((_, i) => (
+                        <div key={`empty-${i}`} />
+                      ))}
+                      {renderCalendar()}
+                    </div>
+                  </div>
+
+                  {selectingTimeFor && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-purple-400">
+                          Wybierz godzinę {selectingTimeFor === "start" ? "rozpoczęcia" : "zakończenia"}
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setSelectingTimeFor(null)}
+                          className="text-[10px] font-bold text-white/40 hover:text-white transition-colors"
+                        >
+                          Anuluj
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                        {Array.from({ length: 24 }).map((_, i) => {
+                          const hourDate = new Date(selectingTimeFor === "start" ? selectedStart! : selectedEnd!);
+                          hourDate.setHours(i, 0, 0, 0);
+
+                          const isPast = hourDate < new Date();
+                          const isOccupied = existingReservations.some(r => {
+                            const s = new Date(r.date_start_planned);
+                            const e = new Date(r.date_end_planned);
+                            return hourDate >= s && hourDate < e;
+                          });
+                          const isInvalidEnd = selectingTimeFor === "end" && !!selectedStart && hourDate <= selectedStart;
+                          const isDisabled = isPast || isOccupied || isInvalidEnd || isCanceled;
+                          const isSelected = selectingTimeFor === "start"
+                            ? (selectedStart && selectedStart.getHours() === i)
+                            : (selectedEnd && selectedEnd.getHours() === i);
+
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              disabled={isDisabled}
+                              onClick={() => handleTimeClick(i)}
+                              className={`py-2.5 rounded-xl text-[10px] font-black transition-all border
+                                ${isDisabled
+                                  ? "bg-white/5 border-transparent text-white/10 cursor-not-allowed"
+                                  : "bg-white/5 border-white/5 text-white/60 hover:border-purple-500/50 hover:text-white"}
+                                ${isSelected ? "!bg-purple-500 !border-purple-500 !text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]" : ""}
+                              `}
+                            >
+                              {String(i).padStart(2, '0')}:00
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between px-2 pt-2">
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-white/30">Wybrany Okres</span>
+                      <span className="text-xs font-bold text-white/80">
+                        {selectedStart ? `${selectedStart.toLocaleDateString('pl-PL')} ${String(selectedStart.getHours()).padStart(2, '0')}:00` : "..."} — {selectedEnd ? `${selectedEnd.toLocaleDateString('pl-PL')} ${String(selectedEnd.getHours()).padStart(2, '0')}:00` : "..."}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-white/30">Łączny Koszt</span>
+                      <div className="text-xl font-black text-white">
+                        {selectedStart && selectedEnd
+                          ? `${formData.purpose === "business" ? 0 : Math.max(1, Math.ceil((selectedEnd.getTime() - selectedStart.getTime()) / (1000 * 60 * 60 * 24))) * 150} PLN`
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-8 border-t border-white/5 bg-black/20 space-y-4">
+                {!isCanceled && (
+                  <button
+                    type="submit"
+                    form="reservation-form"
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className="btn-primary w-full py-5 rounded-2xl shadow-[0_10px_30px_rgba(139,92,246,0.3)] text-base font-black uppercase tracking-widest disabled:opacity-50"
+                  >
+                    {isSubmitting ? "Synchronizacja..." : "Zapisz zmiany"}
+                  </button>
+                )}
+
+                {canBeCanceled && (
+                  <button
+                    type="button"
+                    onClick={handleCancelReservation}
+                    className="w-full py-4 text-xs font-black uppercase tracking-widest text-orange-400/60 hover:text-orange-400 transition-colors border border-transparent hover:border-orange-500/20 rounded-xl"
+                  >
+                    Anuluj tę rezerwację
+                  </button>
+                )}
+
+                {!showDeleteConfirm ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="w-full py-4 text-xs font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 transition-colors border border-transparent hover:border-red-500/20 rounded-xl"
+                  >
+                    Usuń rezerwację z systemu
+                  </button>
+                ) : (
+                  <div className="p-6 rounded-3xl bg-red-500/5 border border-red-500/10 space-y-4 animate-in fade-in zoom-in duration-300">
+                    <p className="text-sm font-bold text-red-400 text-center">Nieodwracalnie usunąć rezerwację?</p>
+                    <div className="flex gap-3">
+                      <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-3 rounded-xl bg-white/5 text-xs font-bold hover:bg-white/10 transition-colors text-white">Cofnij</button>
+                      <button onClick={handleDelete} disabled={isDeleting} className="flex-1 py-3 rounded-xl bg-red-500 text-xs font-black text-white hover:bg-red-600 shadow-lg shadow-red-500/20 disabled:opacity-50">{isDeleting ? "Usuwanie..." : "Tak, usuń"}</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Exploitation Request Modal */}
+      <ExploitationRequestModal
+        reservationId={exploitationModal?.id || 0}
+        vehicleName={exploitationModal?.name || ""}
+        open={exploitationModal !== null}
+        onClose={() => setExploitationModal(null)}
+        toast={toast}
+      />
+    </div>
+  );
+}
