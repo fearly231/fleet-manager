@@ -64,13 +64,13 @@ jobs:
         run: |
           docker build \
             -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_BACKEND }}:${{ steps.tag.outputs.tag }} \
-            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_BACKEND }}:${{ github.sha }} \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_BACKEND }}:${{ github.event.pull_request.head.sha || github.sha }} \
             ./backend
 
       - name: Push backend image
         run: |
           docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_BACKEND }}:${{ steps.tag.outputs.tag }}
-          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_BACKEND }}:${{ github.sha }}
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_BACKEND }}:${{ github.event.pull_request.head.sha || github.sha }}
 
       # ---- Frontend ----
       # NEXT_PUBLIC_API_URL is baked into the Next.js build at compile time
@@ -79,13 +79,13 @@ jobs:
           docker build \
             --build-arg NEXT_PUBLIC_API_URL=/api \
             -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_FRONTEND }}:${{ steps.tag.outputs.tag }} \
-            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_FRONTEND }}:${{ github.sha }} \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_FRONTEND }}:${{ github.event.pull_request.head.sha || github.sha }} \
             ./frontend
 
       - name: Push frontend image
         run: |
           docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_FRONTEND }}:${{ steps.tag.outputs.tag }}
-          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_FRONTEND }}:${{ github.sha }}
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_FRONTEND }}:${{ github.event.pull_request.head.sha || github.sha }}
 
       # ---- Summary ----
       - name: Print summary
@@ -96,4 +96,4 @@ jobs:
           echo "|-------|-----|" >> $GITHUB_STEP_SUMMARY
           echo "| \`${{ env.ECR_BACKEND }}\` | \`${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`${{ env.ECR_FRONTEND }}\` | \`${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Both | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Both | \`${{ github.event.pull_request.head.sha || github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
