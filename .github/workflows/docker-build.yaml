@@ -1,0 +1,99 @@
+# ============================================================================
+# CI/CD Pipeline — Build & Push Docker images to ECR
+# ============================================================================
+# Trigger:
+#   - On push to main:  builds images tagged "latest" (for DEV environment)
+#   - On PR:            builds images tagged "pr-{number}" (for ephemeral environments)
+#
+# Auth: GitHub OIDC → AWS IAM Role (no static credentials needed)
+# ============================================================================
+
+name: Build & Push Docker Images
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  id-token: write   # Required for OIDC
+  contents: read
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REGISTRY: 873593444498.dkr.ecr.eu-central-1.amazonaws.com
+  ECR_BACKEND: dev-fleet-ecr-backend
+  ECR_FRONTEND: dev-fleet-ecr-frontend
+
+jobs:
+  build-and-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Determine image tag: "latest" for main, "pr-{number}" for PRs
+      - name: Set image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "tag=pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+            echo "🏷️  Image tag: pr-${{ github.event.pull_request.number }}"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+            echo "🏷️  Image tag: latest"
+          fi
+
+      # Authenticate to AWS via OIDC (no secrets needed — IAM role trusts GitHub)
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ---- Backend ----
+      - name: Build backend image
+        run: |
+          docker build \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_BACKEND }}:${{ steps.tag.outputs.tag }} \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_BACKEND }}:${{ github.event.pull_request.head.sha || github.sha }} \
+            ./backend
+
+      - name: Push backend image
+        run: |
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_BACKEND }}:${{ steps.tag.outputs.tag }}
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_BACKEND }}:${{ github.event.pull_request.head.sha || github.sha }}
+
+      # ---- Frontend ----
+      # NEXT_PUBLIC_API_URL is baked into the Next.js build at compile time
+      - name: Build frontend image
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=/api \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_FRONTEND }}:${{ steps.tag.outputs.tag }} \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_FRONTEND }}:${{ github.event.pull_request.head.sha || github.sha }} \
+            ./frontend
+
+      - name: Push frontend image
+        run: |
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_FRONTEND }}:${{ steps.tag.outputs.tag }}
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_FRONTEND }}:${{ github.event.pull_request.head.sha || github.sha }}
+
+      # ---- Summary ----
+      - name: Print summary
+        run: |
+          echo "## 🐳 Docker Images Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | Tag |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`${{ env.ECR_BACKEND }}\` | \`${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`${{ env.ECR_FRONTEND }}\` | \`${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Both | \`${{ github.event.pull_request.head.sha || github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
