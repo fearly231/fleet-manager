@@ -8,11 +8,15 @@ import {
 } from "@/types/password_reset_types";
 
 const isClient = typeof window !== "undefined";
-const API_URL = isClient
+const rawApiUrl = isClient
   ? (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
       ? (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000")
       : (process.env.NEXT_PUBLIC_API_URL || ""))
   : (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000");
+
+// In api.ts, endpoints are written as "/api/v1/...".
+// If rawApiUrl is "/api", we strip it to avoid "/api/api/v1/...".
+const API_URL = rawApiUrl.replace(/\/api\/?$/, '');
 
 type AuthListener = () => void;
 
