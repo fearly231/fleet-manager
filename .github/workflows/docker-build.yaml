@@ -20,6 +20,7 @@ on:
 permissions:
   id-token: write   # Required for OIDC
   contents: read
+  pull-requests: write # Required for posting PR comments
 
 env:
   AWS_REGION: eu-central-1
@@ -97,3 +98,20 @@ jobs:
           echo "| \`${{ env.ECR_BACKEND }}\` | \`${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| \`${{ env.ECR_FRONTEND }}\` | \`${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Both | \`${{ github.event.pull_request.head.sha || github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+
+      # ---- PR Comment ----
+      - name: Comment PR with Ephemeral Environment links
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: ephemeral-env
+          message: |
+            ### 🚀 Ephemeral Environment is being deployed!
+            
+            ArgoCD is spinning up an isolated environment for this Pull Request on EKS.
+            It will be available shortly at the links below:
+            
+            * 🌐 **Frontend URL:** https://pr-${{ github.event.pull_request.number }}.dev.chorogra.me
+            * 📚 **API Swagger UI:** https://pr-${{ github.event.pull_request.number }}.dev.chorogra.me/docs
+            
+            > ℹ️ *This environment is automatically provisioned via GitOps and Karpenter Spot instances. It will be cleanly destroyed when this PR is closed or merged.*
