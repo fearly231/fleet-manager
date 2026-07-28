@@ -62,6 +62,11 @@ Logs all actions performed on vehicles:
 *   **Service:** Technical inspections, oil changes, mechanical repairs.
 *   Linked to reservations to track which employee or caretaker authorized the maintenance cost.
 
+### ☁️ 5. Ephemeral Environments (EKS & GitOps)
+*   **Automatic Provisioning:** Every Pull Request opened against this repository automatically deploys an isolated, full-stack ephemeral environment (Frontend, Backend, PostgreSQL) on Amazon EKS.
+*   **Spot Instances & Karpenter:** Powered by AWS Karpenter Spot NodePools (`c7i-flex.large` / `AL2023`) to minimize cloud compute costs.
+*   **GitOps & Storage:** Managed via ArgoCD ApplicationSets with automatic EBS CSI `gp2` storage provisioning and dynamic OIDC IAM roles (IRSA).
+
 ---
 
 ## 💻 Tech Stack
